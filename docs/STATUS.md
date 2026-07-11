@@ -1,6 +1,6 @@
-# STATUS — Phase 0 execution handoff
+# STATUS — Phase 0 execution
 
-Last updated: 2026-07-11 (context handoff during Phase 0, wave 1).
+Last updated: 2026-07-11 (WP 0.1 landed).
 Read `CLAUDE.md` first if you haven't. This doc is the live state of Phase 0
 (`docs/03-roadmap.md`) and must be updated whenever a work package lands.
 
@@ -8,56 +8,49 @@ Read `CLAUDE.md` first if you haven't. This doc is the live state of Phase 0
 
 | WP | Task # | State |
 |---|---|---|
-| 0.1 Repo scaffold | #1 | **IN FLIGHT** — a background agent was mid-build at handoff. See "WP 0.1 takeover" below. |
+| 0.1 Repo scaffold | #1 | **DONE** — see "WP 0.1 notes" below. The prior background agent's work never landed; rebuilt from spec. |
 | 0.2 Schema & tenancy | #2 | Not started (wave 2) |
 | 0.3 Auth & membership | #3 | Not started (wave 2) |
 | 0.4 Deploy pipeline authoring | #4 | Not started (wave 2). AWS *deployment* is blocked on account/credentials — authoring only for now. |
 | 0.5 Pack content | #5 | **DONE**, committed `ecd4e8a`. Preview UI wiring remains (wave 2, agent C). |
 
-Git: branch `main`, remote `origin` = github.com:msd2/auto-insight (push
-after each checkpoint). Commits so far: `c79266c` (planning docs, by Marc),
-`ecd4e8a` (wp0.5 content), `41256fe` (handoff docs). Convention: one
-checkpoint commit per verified WP, message prefix `wp<N.n>:`.
+Git: remote `origin` = github.com:msd2/auto-insight. Wave-1 commits on
+`main`: `c79266c` (planning docs), `ecd4e8a` (wp0.5 content), `41256fe` +
+`a7cce01` (handoff docs). WP 0.1 was developed on branch
+`claude/status-docs-review-jquyqc` (remote-session designated branch) — merge
+to `main` before starting wave 2. Convention: one checkpoint commit per
+verified WP, message prefix `wp<N.n>:`.
 
-## WP 0.1 takeover instructions
+## WP 0.1 notes
 
-The prior session's background agent may or may not have finished after this
-doc was written. **First**: `git status` + inspect the tree, then diff against
-the full WP 0.1 spec below. Complete whatever is missing, then run the
-verification suite regardless of who wrote the code.
+Scaffold as specified in the roadmap: `api/` (FastAPI app factory,
+pydantic-settings `config.py` with Procrastinate DSN derived from
+DATABASE_URL, async SQLAlchemy `db.py`, `GET /health` always-200 with
+`database: "ok"|"unavailable"`, `worker.py` wired to Procrastinate with no
+jobs, empty `models/`/`repositories/`, async-template Alembic with
+`target_metadata = None` and the URL injected from settings in `env.py`,
+uv-managed pyproject, `/health` tests via httpx ASGITransport with the
+`get_session` dependency overridden), `web/` (Vite + React 18.3 + TS,
+TanStack Query + Router with code-based routes, recharts as dependency,
+`/login` placeholder + AppShell layout route with Dashboard/Events/Surveys/
+Reports sidebar and org-name placeholder, ESLint flat + Prettier +
+Vitest/jsdom AppShell smoke test, `src/api/client.ts` fetch wrapper, dev
+proxy `/api` → :8000), root (docker-compose postgres:16 on host 5433,
+Makefile, .gitignore, .env.example, `.github/workflows/ci.yml` — api job
+with postgres service, web job on Node 22).
 
-Spec (agreed, plan-approved): monorepo with
-- `api/` — FastAPI app factory (`autoinsight/main.py`), pydantic-settings
-  `config.py` (DATABASE_URL-driven; Procrastinate DSN derived from same URL),
-  async SQLAlchemy 2 `db.py`, `GET /health` (always 200, reports
-  `database: "ok"|"unavailable"`), `worker.py` (Procrastinate wired, no jobs),
-  empty `models/` + `repositories/` packages, Alembic (async template,
-  `target_metadata = None`, no migrations yet), pyproject managed by `uv`
-  (deps: fastapi, uvicorn[standard], sqlalchemy[asyncio], asyncpg, alembic,
-  procrastinate[psycopg], pydantic-settings; dev: pytest, pytest-asyncio,
-  httpx, ruff, mypy), one /health test via httpx ASGITransport with DB
-  dependency overridden.
-  Status at handoff: `autoinsight/` package written (main/config/db/worker/
-  health); **missing: Alembic init, tests/, uv.lock/venv check**.
-- `web/` — **entirely missing at handoff.** Vite + React 18 (^18.3, not 19) +
-  TS; @tanstack/react-query + react-router (code-based routes, no codegen);
-  recharts (dependency only); `/login` placeholder route + authed AppShell
-  layout (sidebar: Dashboard, Events, Surveys, Reports; org-name placeholder
-  in header); ESLint flat + Prettier + Vitest/jsdom + Testing Library with an
-  AppShell smoke test; `src/api/client.ts` typed fetch wrapper at `/api`;
-  Vite dev proxy → localhost:8000.
-- Root — **missing at handoff**: docker-compose.yml (postgres:16 only, host
-  port **5433**, volume, pg_isready healthcheck), Makefile (dev-db/dev-api/
-  dev-web/dev/test/lint/fmt), .gitignore, .env.example
-  (`DATABASE_URL=postgresql+asyncpg://autoinsight:autoinsight@localhost:5433/autoinsight`),
-  `.github/workflows/ci.yml` (api job with postgres service: ruff/mypy/pytest;
-  web job on Node 22: eslint/tsc/vitest/build).
+Verified in the remote session: `make lint` (ruff + format + mypy strict,
+eslint + tsc + prettier), `make test` (pytest ×2, vitest ×1),
+`npm run build`, uvicorn boot → `/health` returns
+`{"status":"ok","database":"unavailable"}` without a DB and
+`{"status":"ok","database":"ok"}` against a real Postgres 16 on port 5433,
+plus `alembic upgrade head` (no-op, connects cleanly). Caveat: the remote
+container has no Docker daemon, so `docker-compose.yml` itself was not
+booted — Postgres was run directly (same image version/port/credentials).
+First CI run on push should confirm the compose-equivalent api job.
 
-Verification (all must pass before the wp0.1 commit): `make lint`,
-`make test`, `cd web && npm run build`, boot uvicorn + curl /health, and with
-Docker up: compose db healthy + /health reports `database: "ok"`.
-Toolchain on this machine: uv ✓, Python 3.14.4 (target 3.12+; pin uv to 3.12
-if a dep lacks 3.14 wheels), Node 25/npm 11 (CI uses Node 22), Docker ✓.
+Version pins that mattered: vitest 3 (vitest 2 bundles vite 5, conflicts
+with vite 6), uv pinned to Python 3.12 via `api/.python-version`.
 
 ## Wave 2 (after wp0.1 commit) — three parallel agents, disjoint paths
 
