@@ -52,8 +52,8 @@ roadmap.
 
 ## Conventions
 
-- Local git only for now (no remote, nothing pushed). One checkpoint commit
-  per verified work package, message prefix `wp<N.n>:`.
+- Remote: github.com:msd2/auto-insight. One checkpoint commit per verified
+  work package, message prefix `wp<N.n>:`, pushed after verification.
 - Verify a WP's acceptance criteria (listed in the roadmap) before calling it
   done; run the relevant `make` targets yourself — don't trust a green claim
   you didn't reproduce.

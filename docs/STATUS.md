@@ -14,8 +14,9 @@ Read `CLAUDE.md` first if you haven't. This doc is the live state of Phase 0
 | 0.4 Deploy pipeline authoring | #4 | Not started (wave 2). AWS *deployment* is blocked on account/credentials — authoring only for now. |
 | 0.5 Pack content | #5 | **DONE**, committed `ecd4e8a`. Preview UI wiring remains (wave 2, agent C). |
 
-Git: local repo, branch `main`, **no remote**. Commits so far: `c79266c`
-(planning docs, by Marc), `ecd4e8a` (wp0.5 content). Convention: one local
+Git: branch `main`, remote `origin` = github.com:msd2/auto-insight (push
+after each checkpoint). Commits so far: `c79266c` (planning docs, by Marc),
+`ecd4e8a` (wp0.5 content), `41256fe` (handoff docs). Convention: one
 checkpoint commit per verified WP, message prefix `wp<N.n>:`.
 
 ## WP 0.1 takeover instructions
@@ -106,6 +107,7 @@ org sees the app shell"). Checkpoint commit per WP; update tasks #1–#4.
 ## Environment notes
 
 - Session task list (#1–#5) mirrors this table; keep both in sync.
-- No remote → CI workflows are authored but unverifiable until GitHub repo
-  exists; don't claim CI green.
+- Remote is github.com:msd2/auto-insight — once the CI workflow lands, check
+  the Actions run after pushing (`gh run watch`); don't claim CI green
+  without a green run.
 - Postgres via `docker-compose up -d db` on host port 5433.
