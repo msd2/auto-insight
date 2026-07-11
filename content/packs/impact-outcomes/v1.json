@@ -1,0 +1,301 @@
+{
+  "slug": "impact-outcomes",
+  "name": "Impact & Outcomes",
+  "version": 1,
+  "focus": "impact",
+  "description": "Did it move people? Funder-ready evidence of learning, emotional impact, social connection and local importance, with a theme analysis of what audiences say they'll take away — and the ability to show whether outcomes differ between donors and the wider audience.",
+  "headline_questions": [
+    "Did the event move people — emotionally and intellectually?",
+    "What did audiences learn, and what will they take away?",
+    "Can you evidence outcomes for funders, including how donors responded?"
+  ],
+  "question_manifest": [
+    {
+      "id": "imp_learning",
+      "type": "likert_5",
+      "prompt": "I learnt something new",
+      "required": true
+    },
+    {
+      "id": "imp_perspective",
+      "type": "likert_5",
+      "prompt": "It helped me see the world in a different way",
+      "required": true
+    },
+    {
+      "id": "imp_emotion",
+      "type": "likert_5",
+      "prompt": "I felt moved by what I experienced",
+      "required": true
+    },
+    {
+      "id": "imp_connection",
+      "type": "likert_5",
+      "prompt": "I felt connected to the people around me",
+      "required": true
+    },
+    {
+      "id": "imp_important",
+      "type": "likert_5",
+      "prompt": "It's important that this is happening here",
+      "required": true
+    },
+    {
+      "id": "imp_wellbeing",
+      "type": "likert_5",
+      "prompt": "It had a positive effect on my mood or wellbeing",
+      "required": true
+    },
+    {
+      "id": "imp_talk",
+      "type": "single_choice",
+      "prompt": "Have you talked about the event with anyone since attending?",
+      "required": true,
+      "options": [
+        "Yes, with lots of people",
+        "Yes, with one or two people",
+        "Not yet, but I plan to",
+        "No"
+      ]
+    },
+    {
+      "id": "imp_takeaway",
+      "type": "free_text",
+      "prompt": "What will you take away from this experience?",
+      "required": false
+    }
+  ],
+  "insight_spec": {
+    "narrative_prompt": "Write an impact summary suitable for inclusion in a funder report or board pack. Lead with the strongest evidenced outcomes (learning, emotional impact, connection, local importance, wellbeing), quantify agreement plainly, and use the takeaway themes and quotes as qualitative evidence of the outcomes claimed. Where the donor vs non-donor cut is available, comment on whether supporters experienced the event differently — relevant for development teams. Word-of-mouth intent (talking about the event) should be framed as reach beyond the auditorium. Only cite numbers present in the supplied aggregates; state sample size and response rate as caveats, and avoid causal claims stronger than the data supports.",
+    "settle": {
+      "days_after_last_send": 7,
+      "min_responses": 20
+    },
+    "blocks": [
+      {
+        "id": "learning_tile",
+        "kind": "metric_tile",
+        "title": "Learnt something new",
+        "question_ids": ["imp_learning"],
+        "measure": "top_two_box_share",
+        "notes": "Share agreeing or strongly agreeing."
+      },
+      {
+        "id": "outcomes_overview",
+        "kind": "bar",
+        "title": "Impact outcomes at a glance",
+        "question_ids": [
+          "imp_learning",
+          "imp_perspective",
+          "imp_emotion",
+          "imp_connection",
+          "imp_important",
+          "imp_wellbeing"
+        ],
+        "notes": "One bar per outcome: mean agreement score (1-5)."
+      },
+      {
+        "id": "outcomes_detail",
+        "kind": "stacked_bar",
+        "title": "Agreement in detail",
+        "question_ids": [
+          "imp_learning",
+          "imp_perspective",
+          "imp_emotion",
+          "imp_connection",
+          "imp_important",
+          "imp_wellbeing"
+        ]
+      },
+      {
+        "id": "outcomes_by_donor",
+        "kind": "bar",
+        "title": "Donors vs non-donors",
+        "question_ids": ["imp_emotion", "imp_important", "imp_connection"],
+        "cut": "donor_vs_non_donor",
+        "notes": "Grouped bars: mean score per segment for the outcomes development teams care about most."
+      },
+      {
+        "id": "takeaway_themes",
+        "kind": "theme_list",
+        "title": "What audiences will take away",
+        "question_ids": ["imp_takeaway"]
+      },
+      {
+        "id": "takeaway_quotes",
+        "kind": "quote_list",
+        "title": "In their own words",
+        "question_ids": ["imp_takeaway"]
+      }
+    ]
+  },
+  "sample_dataset": {
+    "response_count": 187,
+    "questions": {
+      "imp_learning": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [5, 14, 39, 77, 52]
+      },
+      "imp_perspective": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [6, 17, 46, 74, 44]
+      },
+      "imp_emotion": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [3, 9, 28, 71, 76]
+      },
+      "imp_connection": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [7, 20, 52, 68, 40]
+      },
+      "imp_important": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [2, 8, 31, 74, 72]
+      },
+      "imp_wellbeing": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [3, 7, 30, 79, 68]
+      },
+      "imp_talk": {
+        "type": "distribution",
+        "labels": [
+          "Yes, with lots of people",
+          "Yes, with one or two people",
+          "Not yet, but I plan to",
+          "No"
+        ],
+        "counts": [58, 84, 29, 16]
+      },
+      "imp_takeaway": {
+        "type": "free_text",
+        "answered": 112,
+        "snippets": [
+          "A reminder that stories like mine belong on a stage. I didn't expect to feel so seen.",
+          "I learnt more about the history of this town in ninety minutes than in twenty years of living here.",
+          "The conversation my daughter and I had afterwards. She's still asking questions.",
+          "Honestly? A lighter heart. I'd had an awful week and it genuinely helped.",
+          "It changed how I think about the people who built this area. I'll walk down the high street differently.",
+          "I want to volunteer. Is there a way to get involved?",
+          "That art can be about people like us, made here, and still be world class.",
+          "A new respect for the craft — I had no idea how much work goes into something like this.",
+          "The sense that everyone in that room was feeling the same thing at the same time.",
+          "I've already recommended it to three colleagues. We're planning to come back as a group.",
+          "It made me want to find out more about the real events it was based on.",
+          "Mostly the music. I've been humming it for days, and I bought the album."
+        ]
+      }
+    },
+    "cuts": {
+      "donor_vs_non_donor": {
+        "segments": [
+          {
+            "key": "donor",
+            "label": "Donors",
+            "n": 34,
+            "share": 0.18,
+            "questions": {
+              "imp_emotion": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [0, 1, 3, 11, 19]
+              },
+              "imp_important": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [0, 1, 4, 12, 17]
+              },
+              "imp_connection": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [1, 2, 7, 13, 11]
+              }
+            }
+          },
+          {
+            "key": "non_donor",
+            "label": "Non-donors",
+            "n": 153,
+            "share": 0.82,
+            "questions": {
+              "imp_emotion": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [3, 8, 25, 60, 57]
+              },
+              "imp_important": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [2, 7, 27, 62, 55]
+              },
+              "imp_connection": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [6, 18, 45, 55, 29]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "example_themes": [
+      {
+        "label": "New knowledge of local history and place",
+        "mentions": 31,
+        "quotes": [
+          "I learnt more about the history of this town in ninety minutes than in twenty years of living here.",
+          "It changed how I think about the people who built this area. I'll walk down the high street differently."
+        ]
+      },
+      {
+        "label": "Emotional resonance and feeling seen",
+        "mentions": 27,
+        "quotes": [
+          "A reminder that stories like mine belong on a stage. I didn't expect to feel so seen.",
+          "The sense that everyone in that room was feeling the same thing at the same time."
+        ]
+      },
+      {
+        "label": "Conversations continuing after the event",
+        "mentions": 22,
+        "quotes": [
+          "The conversation my daughter and I had afterwards. She's still asking questions.",
+          "I've already recommended it to three colleagues. We're planning to come back as a group."
+        ]
+      },
+      {
+        "label": "Wellbeing and lifted mood",
+        "mentions": 15,
+        "quotes": [
+          "Honestly? A lighter heart. I'd had an awful week and it genuinely helped."
+        ]
+      },
+      {
+        "label": "Wanting to get involved or learn more",
+        "mentions": 12,
+        "quotes": [
+          "I want to volunteer. Is there a way to get involved?",
+          "It made me want to find out more about the real events it was based on."
+        ]
+      }
+    ],
+    "example_narrative": {
+      "headline": "Strong, fundable evidence of emotional impact and local importance — and donors felt it most keenly.",
+      "key_findings": [
+        "79% agreed the event moved them emotionally and 78% that it is important it happens here — the two strongest outcomes, both directly usable as funder evidence.",
+        "69% report learning something new, with 'new knowledge of local history and place' the most common theme in what audiences say they'll take away (31 mentions).",
+        "Word of mouth is working: 76% have already talked about the event with others, extending its reach well beyond the 187 respondents.",
+        "Donors (18% of respondents) reported stronger emotional impact and sense of importance than non-donors — useful signal for the development team's next appeal."
+      ],
+      "caveats": [
+        "187 responses from a single event; outcome shares are audience-reported, not independently assessed.",
+        "The donor segment is small (n=34), so donor vs non-donor differences are indicative rather than conclusive."
+      ]
+    }
+  }
+}

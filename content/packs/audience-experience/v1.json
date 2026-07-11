@@ -1,0 +1,289 @@
+{
+  "slug": "audience-experience",
+  "name": "Audience Experience",
+  "version": 1,
+  "focus": "quality",
+  "description": "How good was it, in your audience's eyes? Built on the Culture Counts quality dimensions — captivation, challenge, distinctiveness, enthusiasm, relevance and rigour — plus likelihood to recommend, so you can compare the quality of this event against your others and see where first-time attenders felt differently.",
+  "headline_questions": [
+    "Was it good — and would your audience recommend it?",
+    "How did the event score on each quality dimension?",
+    "Did first-time attenders rate the experience differently from your regulars?"
+  ],
+  "question_manifest": [
+    {
+      "id": "exp_captivation",
+      "type": "likert_5",
+      "prompt": "It absorbed and held my attention",
+      "required": true,
+      "dimension": "captivation"
+    },
+    {
+      "id": "exp_challenge",
+      "type": "likert_5",
+      "prompt": "It was thought-provoking",
+      "required": true,
+      "dimension": "challenge"
+    },
+    {
+      "id": "exp_distinctiveness",
+      "type": "likert_5",
+      "prompt": "It was different from things I've experienced before",
+      "required": true,
+      "dimension": "distinctiveness"
+    },
+    {
+      "id": "exp_enthusiasm",
+      "type": "likert_5",
+      "prompt": "I would come to something like this again",
+      "required": true,
+      "dimension": "enthusiasm"
+    },
+    {
+      "id": "exp_relevance",
+      "type": "likert_5",
+      "prompt": "It had something to say about the world in which we live",
+      "required": true,
+      "dimension": "relevance"
+    },
+    {
+      "id": "exp_rigour",
+      "type": "likert_5",
+      "prompt": "It was well thought through and put together",
+      "required": true,
+      "dimension": "rigour"
+    },
+    {
+      "id": "exp_nps",
+      "type": "nps",
+      "prompt": "How likely are you to recommend this event to a friend or colleague?",
+      "required": true
+    },
+    {
+      "id": "exp_open",
+      "type": "free_text",
+      "prompt": "Is there anything else you'd like to tell us about your experience?",
+      "required": false
+    }
+  ],
+  "insight_spec": {
+    "narrative_prompt": "Write a quality assessment of this event for the organisation's marketing and programming team. Lead with the overall picture across the Culture Counts quality dimensions, name the strongest and weakest dimensions, and interpret the likelihood-to-recommend score. Where the first-timer vs regular cut is available, say plainly whether newcomers experienced the event differently and what that means for programming and audience development. Quote the open comments sparingly to illustrate, never to generalise. Only cite numbers present in the supplied aggregates, and close with caveats on sample size and response rate.",
+    "settle": {
+      "days_after_last_send": 7,
+      "min_responses": 20
+    },
+    "blocks": [
+      {
+        "id": "recommend_tile",
+        "kind": "metric_tile",
+        "title": "Likelihood to recommend (NPS)",
+        "question_ids": ["exp_nps"],
+        "measure": "nps"
+      },
+      {
+        "id": "dimension_scores",
+        "kind": "bar",
+        "title": "Quality dimensions at a glance",
+        "question_ids": [
+          "exp_captivation",
+          "exp_challenge",
+          "exp_distinctiveness",
+          "exp_enthusiasm",
+          "exp_relevance",
+          "exp_rigour"
+        ],
+        "notes": "One bar per dimension: mean agreement score (1-5)."
+      },
+      {
+        "id": "dimension_agreement",
+        "kind": "stacked_bar",
+        "title": "Agreement in detail",
+        "question_ids": [
+          "exp_captivation",
+          "exp_challenge",
+          "exp_distinctiveness",
+          "exp_enthusiasm",
+          "exp_relevance",
+          "exp_rigour"
+        ],
+        "notes": "One stacked row per dimension: full strongly-disagree to strongly-agree distribution."
+      },
+      {
+        "id": "dimensions_by_first_timer",
+        "kind": "bar",
+        "title": "First-timers vs regulars",
+        "question_ids": [
+          "exp_captivation",
+          "exp_challenge",
+          "exp_distinctiveness",
+          "exp_enthusiasm",
+          "exp_relevance",
+          "exp_rigour"
+        ],
+        "cut": "first_timer_vs_regular",
+        "notes": "Grouped bars: mean dimension score per segment. This is the box-office enrichment a survey alone can't do."
+      },
+      {
+        "id": "experience_quotes",
+        "kind": "quote_list",
+        "title": "In their own words",
+        "question_ids": ["exp_open"]
+      }
+    ]
+  },
+  "sample_dataset": {
+    "response_count": 243,
+    "questions": {
+      "exp_captivation": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [3, 8, 27, 104, 101]
+      },
+      "exp_challenge": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [6, 19, 58, 96, 64]
+      },
+      "exp_distinctiveness": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [5, 21, 63, 92, 62]
+      },
+      "exp_enthusiasm": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [4, 9, 31, 88, 111]
+      },
+      "exp_relevance": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [7, 18, 55, 99, 64]
+      },
+      "exp_rigour": {
+        "type": "distribution",
+        "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+        "counts": [2, 7, 24, 98, 112]
+      },
+      "exp_nps": {
+        "type": "nps",
+        "counts_by_score": {
+          "0": 1, "1": 0, "2": 2, "3": 3, "4": 5, "5": 9, "6": 12,
+          "7": 34, "8": 52, "9": 64, "10": 61
+        },
+        "score": 38
+      },
+      "exp_open": {
+        "type": "free_text",
+        "answered": 131,
+        "snippets": [
+          "The staging in the second half was extraordinary — I've never seen the space used like that before.",
+          "Completely absorbing from start to finish. My partner and I talked about it the whole way home.",
+          "Beautifully performed, though I'll admit some of it went over my head.",
+          "A bit long. The first act could easily lose twenty minutes without harming the story.",
+          "I came because a friend dragged me along and I'm so glad she did.",
+          "The live music elevated everything. Please keep programming work like this.",
+          "Seats in the balcony are really uncomfortable for anything over two hours.",
+          "Challenging in the best way. Not what I expected at all, and I mean that as a compliment.",
+          "The ending felt rushed compared with how carefully everything else was built.",
+          "You could tell every detail had been considered, right down to the front-of-house welcome.",
+          "First time here and I couldn't fault the performances, but I struggled to hear some of the dialogue from row R.",
+          "It made me think about my own family in a way I didn't see coming. Wonderful."
+        ]
+      }
+    },
+    "cuts": {
+      "first_timer_vs_regular": {
+        "segments": [
+          {
+            "key": "first_timer",
+            "label": "First-time attenders",
+            "n": 87,
+            "share": 0.36,
+            "questions": {
+              "exp_captivation": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [2, 5, 14, 38, 28]
+              },
+              "exp_challenge": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [3, 9, 24, 32, 19]
+              },
+              "exp_distinctiveness": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [1, 6, 19, 35, 26]
+              },
+              "exp_enthusiasm": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [3, 6, 16, 33, 29]
+              },
+              "exp_relevance": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [4, 9, 22, 33, 19]
+              },
+              "exp_rigour": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [1, 4, 11, 37, 34]
+              }
+            }
+          },
+          {
+            "key": "regular",
+            "label": "Regular attenders",
+            "n": 156,
+            "share": 0.64,
+            "questions": {
+              "exp_captivation": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [1, 3, 13, 66, 73]
+              },
+              "exp_challenge": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [3, 10, 34, 64, 45]
+              },
+              "exp_distinctiveness": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [4, 15, 44, 57, 36]
+              },
+              "exp_enthusiasm": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [1, 3, 15, 55, 82]
+              },
+              "exp_relevance": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [3, 9, 33, 66, 45]
+              },
+              "exp_rigour": {
+                "type": "distribution",
+                "labels": ["Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly agree"],
+                "counts": [1, 3, 13, 61, 78]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "example_narrative": {
+      "headline": "A high-quality event that captivated its audience — but it landed harder with regulars than with the 36% attending for the first time.",
+      "key_findings": [
+        "Rigour (4.28) and captivation (4.20) were the strongest dimensions: 86% agreed the event was well put together, and 84% that it absorbed and held their attention.",
+        "Likelihood to recommend is strong at NPS +38, with 51% of respondents scoring 9 or 10.",
+        "Distinctiveness was the softest dimension (mean 3.76), suggesting audiences saw the event as excellent rather than unlike anything they'd seen before.",
+        "First-time attenders — 36% of respondents — rated every dimension below regulars, with the biggest gaps on relevance and challenge; worth considering when marketing similar work to new audiences."
+      ],
+      "caveats": [
+        "243 responses from a single event; comparisons across events need consistent use of this pack.",
+        "First-timer status comes from box office history and may undercount people who previously booked under a different email address."
+      ]
+    }
+  }
+}

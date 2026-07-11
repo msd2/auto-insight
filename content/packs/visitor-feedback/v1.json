@@ -1,0 +1,275 @@
+{
+  "slug": "visitor-feedback",
+  "name": "Visitor Feedback",
+  "version": 1,
+  "focus": "feedback",
+  "description": "What did they love, what frustrated them, and what would they change? A free-text-led pack with automatic theme extraction, anchored by an overall rating and likelihood to recommend so the stories come with numbers attached.",
+  "headline_questions": [
+    "What did visitors love — and what frustrated them?",
+    "If they could change one thing, what would it be?",
+    "How does satisfaction differ between first-time visitors and regulars?"
+  ],
+  "question_manifest": [
+    {
+      "id": "fb_overall",
+      "type": "likert_5",
+      "prompt": "Overall, how would you rate your experience?",
+      "required": true,
+      "scale_labels": ["Very poor", "Poor", "Average", "Good", "Excellent"]
+    },
+    {
+      "id": "fb_nps",
+      "type": "nps",
+      "prompt": "How likely are you to recommend a visit to a friend or colleague?",
+      "required": true
+    },
+    {
+      "id": "fb_value",
+      "type": "single_choice",
+      "prompt": "How did you feel about the value for money?",
+      "required": true,
+      "options": ["Excellent value", "Good value", "Fair", "Poor value"]
+    },
+    {
+      "id": "fb_loved",
+      "type": "free_text",
+      "prompt": "What did you love about your visit?",
+      "required": false
+    },
+    {
+      "id": "fb_frustrated",
+      "type": "free_text",
+      "prompt": "Was there anything that frustrated or disappointed you?",
+      "required": false
+    },
+    {
+      "id": "fb_change",
+      "type": "free_text",
+      "prompt": "If you could change one thing about your visit, what would it be?",
+      "required": false
+    }
+  ],
+  "insight_spec": {
+    "narrative_prompt": "Write a visitor feedback digest for the venue's operations and marketing team. Lead with the overall satisfaction picture (rating, recommendation, value for money), then organise the free-text feedback into what visitors loved, what frustrated them, and what they would change — as actionable themes ranked by how often they came up, each illustrated with one or two representative quotes. Distinguish clearly between praise for the programme and feedback about the venue experience (queues, seating, signage, staff). Where the first-timer vs regular cut is available, flag any satisfaction gap. Only cite numbers present in the supplied aggregates; note response volumes per free-text question, since not everyone answers them.",
+    "settle": {
+      "days_after_last_send": 7,
+      "min_responses": 25
+    },
+    "blocks": [
+      {
+        "id": "overall_tile",
+        "kind": "metric_tile",
+        "title": "Overall experience",
+        "question_ids": ["fb_overall"],
+        "measure": "mean",
+        "notes": "Mean rating out of 5."
+      },
+      {
+        "id": "recommend_distribution",
+        "kind": "distribution",
+        "title": "Likelihood to recommend",
+        "question_ids": ["fb_nps"],
+        "notes": "Full 0-10 histogram with promoter/passive/detractor bands."
+      },
+      {
+        "id": "feedback_themes",
+        "kind": "theme_list",
+        "title": "What visitors talked about",
+        "question_ids": ["fb_loved", "fb_frustrated"],
+        "notes": "Themes extracted across both the 'loved' and 'frustrated' questions, labelled by sentiment."
+      },
+      {
+        "id": "change_one_thing",
+        "kind": "quote_list",
+        "title": "If they could change one thing",
+        "question_ids": ["fb_change"]
+      },
+      {
+        "id": "overall_by_first_timer",
+        "kind": "bar",
+        "title": "Satisfaction: first-timers vs regulars",
+        "question_ids": ["fb_overall"],
+        "cut": "first_timer_vs_regular",
+        "notes": "Mean overall rating per segment."
+      },
+      {
+        "id": "value_for_money",
+        "kind": "bar",
+        "title": "Value for money",
+        "question_ids": ["fb_value"]
+      }
+    ]
+  },
+  "sample_dataset": {
+    "response_count": 312,
+    "questions": {
+      "fb_overall": {
+        "type": "distribution",
+        "labels": ["Very poor", "Poor", "Average", "Good", "Excellent"],
+        "counts": [6, 15, 49, 124, 118]
+      },
+      "fb_nps": {
+        "type": "nps",
+        "counts_by_score": {
+          "0": 2, "1": 1, "2": 3, "3": 6, "4": 8, "5": 14, "6": 19,
+          "7": 44, "8": 63, "9": 78, "10": 74
+        },
+        "score": 32
+      },
+      "fb_value": {
+        "type": "distribution",
+        "labels": ["Excellent value", "Good value", "Fair", "Poor value"],
+        "counts": [78, 141, 74, 19]
+      },
+      "fb_loved": {
+        "type": "free_text",
+        "answered": 268,
+        "snippets": [
+          "The atmosphere in the foyer before the show — live music, friendly staff, a real sense of occasion.",
+          "The performances. Genuinely West End quality on our doorstep.",
+          "How welcome the staff made my mum feel. She uses a wheelchair and everything was thought of.",
+          "The lighting design took my breath away.",
+          "Being surrounded by people of all ages. Lovely to see so many young people in the audience.",
+          "The interval ice cream! Small thing, but the little touches matter.",
+          "That final scene. I don't want to spoil it, but nobody in our row moved a muscle.",
+          "The pre-show talk added so much. More of those please.",
+          "It felt like an event, not just a night out — from the moment we walked in.",
+          "The bar staff remembered our interval order from last time. That's why we keep coming back.",
+          "Free programme sheets rather than charging £5 for a glossy one. Thank you.",
+          "The community cast members alongside the professionals. You could feel the pride coming off the stage.",
+          "Perfect length, no dragging, home by ten.",
+          "The building itself — the restoration is stunning and the history panels in the foyer are a nice touch."
+        ]
+      },
+      "fb_frustrated": {
+        "type": "free_text",
+        "answered": 176,
+        "snippets": [
+          "The queue for the bar at the interval. Twenty minutes for two drinks — we gave up.",
+          "Parking. The car park was full an hour before curtain up and the signage to the overflow is non-existent.",
+          "Leg room in the stalls, rows F to K especially. I'm not even tall.",
+          "The card machine at the kiosk was down, cash only, no warning.",
+          "People filming on their phones and no one stopping them.",
+          "The start was delayed fifteen minutes with no announcement or apology.",
+          "It was very warm in the circle by the second half. Some ventilation would help.",
+          "Booking fees. £3.50 per ticket feels steep when we booked in person.",
+          "The accessible toilet was out of order — again.",
+          "Sight lines from the side of the balcony are poor and the seat map doesn't warn you.",
+          "Emails before the visit were great, but there was nothing telling us the café now closes at 5pm.",
+          "A group behind us talked through the first act and staff didn't intervene."
+        ]
+      },
+      "fb_change": {
+        "type": "free_text",
+        "answered": 203,
+        "snippets": [
+          "A second bar or a pre-order system for interval drinks.",
+          "Earlier start time on weeknights — 8pm means midnight for those of us coming from villages.",
+          "More leg room, even if it means slightly pricier tickets. I'd pay it.",
+          "Clearer parking information in the confirmation email.",
+          "A quiet performance option — my son is autistic and we'd love to come as a family.",
+          "Cheaper tickets for under-30s. I want to bring friends but they baulk at the price.",
+          "Make the programme available online after the show.",
+          "Fix the accessible loo. It's been out twice in a row now.",
+          "Sell interval drinks in the auditorium queue like some venues do.",
+          "A matinee for this kind of show — evenings are hard with young kids.",
+          "Better signposting from the station. First-timers were wandering around looking lost.",
+          "Nothing — just keep programming work of this standard."
+        ]
+      }
+    },
+    "cuts": {
+      "first_timer_vs_regular": {
+        "segments": [
+          {
+            "key": "first_timer",
+            "label": "First-time visitors",
+            "n": 128,
+            "share": 0.41,
+            "questions": {
+              "fb_overall": {
+                "type": "distribution",
+                "labels": ["Very poor", "Poor", "Average", "Good", "Excellent"],
+                "counts": [4, 9, 27, 52, 36]
+              }
+            }
+          },
+          {
+            "key": "regular",
+            "label": "Regular visitors",
+            "n": 184,
+            "share": 0.59,
+            "questions": {
+              "fb_overall": {
+                "type": "distribution",
+                "labels": ["Very poor", "Poor", "Average", "Good", "Excellent"],
+                "counts": [2, 6, 22, 72, 82]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "example_themes": [
+      {
+        "label": "Atmosphere and staff welcome (loved)",
+        "mentions": 87,
+        "quotes": [
+          "The atmosphere in the foyer before the show — live music, friendly staff, a real sense of occasion.",
+          "How welcome the staff made my mum feel. She uses a wheelchair and everything was thought of."
+        ]
+      },
+      {
+        "label": "Quality of the performances (loved)",
+        "mentions": 74,
+        "quotes": [
+          "The performances. Genuinely West End quality on our doorstep."
+        ]
+      },
+      {
+        "label": "Interval bar queues (frustration)",
+        "mentions": 41,
+        "quotes": [
+          "The queue for the bar at the interval. Twenty minutes for two drinks — we gave up.",
+          "A second bar or a pre-order system for interval drinks."
+        ]
+      },
+      {
+        "label": "Parking and wayfinding (frustration)",
+        "mentions": 29,
+        "quotes": [
+          "Parking. The car park was full an hour before curtain up and the signage to the overflow is non-existent.",
+          "Better signposting from the station. First-timers were wandering around looking lost."
+        ]
+      },
+      {
+        "label": "Seating comfort and leg room (frustration)",
+        "mentions": 24,
+        "quotes": [
+          "Leg room in the stalls, rows F to K especially. I'm not even tall."
+        ]
+      },
+      {
+        "label": "Accessibility (mixed)",
+        "mentions": 18,
+        "quotes": [
+          "A quiet performance option — my son is autistic and we'd love to come as a family.",
+          "The accessible toilet was out of order — again."
+        ]
+      }
+    ],
+    "example_narrative": {
+      "headline": "Visitors love the welcome and the work — the fixable frustrations are the interval bar, parking information and leg room.",
+      "key_findings": [
+        "78% rated their visit Good or Excellent (mean 4.07/5) and likelihood to recommend stands at NPS +32; 70% called it good or excellent value for money.",
+        "Praise concentrates on two things: the front-of-house welcome and atmosphere (87 mentions) and the quality of the performances themselves (74 mentions).",
+        "The top frustrations are operational, not artistic: interval bar queues (41 mentions), parking and wayfinding (29) and leg room (24) — all recurring in the 'change one thing' answers too.",
+        "First-time visitors (41% of respondents) rated the visit noticeably lower than regulars (mean 3.84 vs 4.23), and wayfinding complaints came disproportionately from them."
+      ],
+      "caveats": [
+        "Free-text questions were optional: 268 of 312 answered 'loved', 176 'frustrated' — frustration volumes are not directly comparable to praise volumes.",
+        "Theme counts come from automated extraction and should be read as indicative magnitudes rather than exact tallies."
+      ]
+    }
+  }
+}

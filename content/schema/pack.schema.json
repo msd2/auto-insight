@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://auto-insight.internal/schemas/pack.schema.json",
+  "title": "Insight Pack Version",
+  "description": "One version of an insight pack: the survey question manifest, the insight spec (charts, metrics, narrative prompt, settle rules) and a sample dataset used to render catalogue previews. Loaded into survey_templates + template_versions (see content/README.md).",
+  "type": "object",
+  "required": [
+    "slug",
+    "name",
+    "version",
+    "focus",
+    "description",
+    "headline_questions",
+    "question_manifest",
+    "insight_spec",
+    "sample_dataset"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable identifier; must match the pack's directory name under content/packs/. Maps to survey_templates.slug."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name shown in the catalogue. Maps to survey_templates.name."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic version number; must match the file name (v<version>.json). Published versions are immutable — any change is a new file/version. Maps to template_versions.version."
+    },
+    "focus": {
+      "enum": ["quality", "impact", "feedback", "profile"],
+      "description": "Catalogue focus badge. Maps to survey_templates.focus."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-paragraph catalogue description. Maps to survey_templates.description."
+    },
+    "headline_questions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 5,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Plain-English questions this pack answers about an audience; shown on the catalogue card and pack page ('Answers questions like...')."
+    },
+    "question_manifest": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/question" },
+      "description": "Ordered survey questions. Array order is presentation order. Maps to template_versions.question_manifest."
+    },
+    "insight_spec": { "$ref": "#/$defs/insight_spec" },
+    "sample_dataset": { "$ref": "#/$defs/sample_dataset" }
+  },
+  "$defs": {
+    "id_slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$"
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "type", "prompt", "required"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id_slug",
+          "description": "Unique within the pack. Referenced by insight_spec blocks and sample_dataset."
+        },
+        "type": {
+          "enum": [
+            "likert_5",
+            "likert_7",
+            "nps",
+            "single_choice",
+            "multi_choice",
+            "free_text",
+            "demographic"
+          ]
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Question text as shown to the respondent."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the respondent must answer to proceed."
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Answer options. Required for single_choice, multi_choice and demographic; not allowed for other types."
+        },
+        "scale_labels": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 7,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional override of the default agreement scale labels for likert questions (length must match the scale: 5 or 7)."
+        },
+        "dimension": {
+          "$ref": "#/$defs/id_slug",
+          "description": "Culture Counts quality dimension key (e.g. captivation, rigour). Only meaningful on likert questions."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "enum": ["single_choice", "multi_choice", "demographic"] } }
+          },
+          "then": { "required": ["options"] }
+        },
+        {
+          "if": {
+            "properties": { "type": { "enum": ["likert_5", "likert_7", "nps", "free_text"] } }
+          },
+          "then": { "not": { "required": ["options"] } }
+        },
+        {
+          "if": {
+            "not": { "properties": { "type": { "enum": ["likert_5", "likert_7"] } } }
+          },
+          "then": {
+            "allOf": [
+              { "not": { "required": ["dimension"] } },
+              { "not": { "required": ["scale_labels"] } }
+            ]
+          }
+        }
+      ]
+    },
+    "insight_spec": {
+      "type": "object",
+      "required": ["narrative_prompt", "settle", "blocks"],
+      "additionalProperties": false,
+      "description": "What the insight report contains. Maps to template_versions.insight_spec.",
+      "properties": {
+        "narrative_prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pack-level instruction for the LLM narrative section (key findings, themes, caveats). The insight job supplies it alongside the computed aggregates and free-text answers."
+        },
+        "settle": {
+          "type": "object",
+          "required": ["days_after_last_send", "min_responses"],
+          "additionalProperties": false,
+          "description": "When responses are considered settled and the insight report may be generated.",
+          "properties": {
+            "days_after_last_send": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Generate the report this many days after the last send (invite or reminder), unless triggered manually."
+            },
+            "min_responses": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Below this response count the report is generated with a prominent low-sample caveat instead of full narrative confidence."
+            }
+          }
+        },
+        "blocks": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 7,
+          "items": { "$ref": "#/$defs/block" },
+          "description": "Ordered chart/metric blocks. Array order is report layout order."
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["id", "kind", "title", "question_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id_slug" },
+        "kind": {
+          "enum": [
+            "metric_tile",
+            "bar",
+            "stacked_bar",
+            "line",
+            "distribution",
+            "theme_list",
+            "quote_list"
+          ]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "question_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/id_slug" },
+          "description": "Manifest question ids this block draws from."
+        },
+        "cut": {
+          "enum": ["none", "first_timer_vs_regular", "donor_vs_non_donor", "booking_lead_time"],
+          "default": "none",
+          "description": "Optional box-office cut: the block is rendered per segment. Omitting the field means 'none'."
+        },
+        "measure": {
+          "enum": ["nps", "mean", "top_two_box_share", "option_share"],
+          "description": "How a metric_tile summarises its question. Required for metric_tile, not allowed otherwise."
+        },
+        "option_label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For measure=option_share: the option whose share of respondents is displayed. Must be one of the question's options."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-form authoring note; not rendered."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "metric_tile" } } },
+          "then": { "required": ["measure"] },
+          "else": { "not": { "required": ["measure"] } }
+        },
+        {
+          "if": { "properties": { "measure": { "const": "option_share" } }, "required": ["measure"] },
+          "then": { "required": ["option_label"] },
+          "else": { "not": { "required": ["option_label"] } }
+        }
+      ]
+    },
+    "sample_dataset": {
+      "type": "object",
+      "required": ["response_count", "questions"],
+      "additionalProperties": false,
+      "description": "Synthetic aggregates used to render the catalogue preview. Same aggregate shapes the Phase 5 pipeline computes from real responses. Maps to template_versions.sample_dataset.",
+      "properties": {
+        "response_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total synthetic responses the aggregates represent."
+        },
+        "questions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-z0-9]+(_[a-z0-9]+)*$": { "$ref": "#/$defs/aggregate" }
+          },
+          "description": "Aggregate per manifest question id. Must cover every question in the manifest, and nothing else."
+        },
+        "cuts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "first_timer_vs_regular": { "$ref": "#/$defs/cut" },
+            "donor_vs_non_donor": { "$ref": "#/$defs/cut" },
+            "booking_lead_time": { "$ref": "#/$defs/cut" }
+          },
+          "description": "Per-segment aggregates for every box-office cut used by an insight block."
+        },
+        "example_themes": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/theme" },
+          "description": "Stand-in for LLM theme extraction, used to render theme_list preview blocks. Required iff the insight_spec has a theme_list block."
+        },
+        "example_narrative": { "$ref": "#/$defs/narrative" }
+      }
+    },
+    "aggregate": {
+      "oneOf": [
+        { "$ref": "#/$defs/distribution_aggregate" },
+        { "$ref": "#/$defs/nps_aggregate" },
+        { "$ref": "#/$defs/free_text_aggregate" }
+      ]
+    },
+    "segment_aggregate": {
+      "oneOf": [
+        { "$ref": "#/$defs/distribution_aggregate" },
+        { "$ref": "#/$defs/nps_aggregate" }
+      ]
+    },
+    "distribution_aggregate": {
+      "type": "object",
+      "required": ["type", "labels", "counts"],
+      "additionalProperties": false,
+      "description": "Aggregate for likert, single_choice, multi_choice and demographic questions. labels[i] pairs with counts[i].",
+      "properties": {
+        "type": { "const": "distribution" },
+        "labels": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Must exactly match the question's options (choice/demographic), scale_labels, or the default likert scale."
+        },
+        "counts": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "answered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Respondents who answered. Defaults to sum(counts) for single-select questions; required for multi_choice, where counts may sum to more than answered."
+        }
+      }
+    },
+    "nps_aggregate": {
+      "type": "object",
+      "required": ["type", "counts_by_score", "score"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "nps" },
+        "counts_by_score": {
+          "type": "object",
+          "required": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+          "additionalProperties": false,
+          "properties": {
+            "0": { "type": "integer", "minimum": 0 },
+            "1": { "type": "integer", "minimum": 0 },
+            "2": { "type": "integer", "minimum": 0 },
+            "3": { "type": "integer", "minimum": 0 },
+            "4": { "type": "integer", "minimum": 0 },
+            "5": { "type": "integer", "minimum": 0 },
+            "6": { "type": "integer", "minimum": 0 },
+            "7": { "type": "integer", "minimum": 0 },
+            "8": { "type": "integer", "minimum": 0 },
+            "9": { "type": "integer", "minimum": 0 },
+            "10": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "score": {
+          "type": "integer",
+          "minimum": -100,
+          "maximum": 100,
+          "description": "Precomputed NPS: round(100 * (promoters - detractors) / total). Cross-checked by validate.py."
+        }
+      }
+    },
+    "free_text_aggregate": {
+      "type": "object",
+      "required": ["type", "answered", "snippets"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "free_text" },
+        "answered": { "type": "integer", "minimum": 0 },
+        "snippets": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 25,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Curated example answers used by quote_list previews and as raw material for example themes."
+        }
+      }
+    },
+    "cut": {
+      "type": "object",
+      "required": ["segments"],
+      "additionalProperties": false,
+      "properties": {
+        "segments": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/segment" }
+        }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "required": ["key", "label", "n", "share", "questions"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/id_slug" },
+        "label": { "type": "string", "minLength": 1 },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Synthetic respondents in this segment."
+        },
+        "share": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "Share of matched respondents; must be consistent with n (validate.py checks within 0.02)."
+        },
+        "questions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[a-z0-9]+(_[a-z0-9]+)*$": { "$ref": "#/$defs/segment_aggregate" }
+          },
+          "description": "Aggregates within this segment for the question ids that cut blocks need."
+        }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "required": ["label", "mentions", "quotes"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "mentions": { "type": "integer", "minimum": 1 },
+        "quotes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "narrative": {
+      "type": "object",
+      "required": ["headline", "key_findings", "caveats"],
+      "additionalProperties": false,
+      "description": "Example narrative rendered on the pack preview page as a stand-in for the LLM output.",
+      "properties": {
+        "headline": { "type": "string", "minLength": 1 },
+        "key_findings": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "caveats": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

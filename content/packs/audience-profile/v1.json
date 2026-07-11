@@ -1,0 +1,277 @@
+{
+  "slug": "audience-profile",
+  "name": "Audience Profile",
+  "version": 1,
+  "focus": "profile",
+  "description": "Who came? Age, gender, distance travelled, who they came with, what motivated the booking and how they heard about it — with the first-timer share up front, and marketing channels cut by booking lead time so you can see which channels drive early sales and which fill last-minute seats.",
+  "headline_questions": [
+    "Who came — and how many were first-time visitors?",
+    "How did your audience hear about the event, and what motivated them to book?",
+    "Do early bookers and last-minute bookers come through different channels?"
+  ],
+  "question_manifest": [
+    {
+      "id": "prof_age",
+      "type": "demographic",
+      "prompt": "Which age group are you in?",
+      "required": true,
+      "options": ["Under 16", "16–24", "25–34", "35–44", "45–54", "55–64", "65–74", "75+"]
+    },
+    {
+      "id": "prof_gender",
+      "type": "demographic",
+      "prompt": "How do you describe your gender?",
+      "required": false,
+      "options": ["Female", "Male", "Non-binary", "Prefer to self-describe", "Prefer not to say"]
+    },
+    {
+      "id": "prof_distance",
+      "type": "demographic",
+      "prompt": "How far did you travel to attend?",
+      "required": true,
+      "options": ["Less than 5 miles", "5–15 miles", "16–50 miles", "More than 50 miles"]
+    },
+    {
+      "id": "prof_first_visit",
+      "type": "single_choice",
+      "prompt": "How often do you visit our venue?",
+      "required": true,
+      "options": [
+        "This was my first visit",
+        "I've been once or twice before",
+        "I visit a few times a year",
+        "I visit regularly"
+      ]
+    },
+    {
+      "id": "prof_heard",
+      "type": "single_choice",
+      "prompt": "How did you hear about this event?",
+      "required": true,
+      "options": [
+        "Email from the venue",
+        "Social media",
+        "Word of mouth",
+        "Print, poster or flyer",
+        "Press or a review",
+        "Venue website",
+        "Other"
+      ]
+    },
+    {
+      "id": "prof_companions",
+      "type": "single_choice",
+      "prompt": "Who did you attend with?",
+      "required": true,
+      "options": ["On my own", "Partner", "Family with children", "Friends", "An organised group"]
+    },
+    {
+      "id": "prof_motivation",
+      "type": "multi_choice",
+      "prompt": "What motivated you to book? (tick all that apply)",
+      "required": false,
+      "options": [
+        "The performers or company",
+        "The subject or story",
+        "A recommendation",
+        "Something to do with family or friends",
+        "The venue itself",
+        "A ticket offer or the price"
+      ]
+    }
+  ],
+  "insight_spec": {
+    "narrative_prompt": "Write an audience profile summary for the marketing team. Lead with who attended: age shape, first-visit share, distance travelled and group composition, comparing against what the organisation might expect for this kind of event. Then cover acquisition: which channels brought people in, what motivated bookings, and — where the booking lead time cut is available — how channel mix differs between early bookers and last-minute bookers, with a concrete suggestion of what that means for campaign timing. Only cite numbers present in the supplied aggregates. Note that demographics describe survey respondents, who may skew relative to the full audience, and flag any small groups that should not be over-interpreted.",
+    "settle": {
+      "days_after_last_send": 7,
+      "min_responses": 30
+    },
+    "blocks": [
+      {
+        "id": "first_visit_tile",
+        "kind": "metric_tile",
+        "title": "First-time visitors",
+        "question_ids": ["prof_first_visit"],
+        "measure": "option_share",
+        "option_label": "This was my first visit"
+      },
+      {
+        "id": "age_profile",
+        "kind": "distribution",
+        "title": "Age profile",
+        "question_ids": ["prof_age"]
+      },
+      {
+        "id": "how_heard",
+        "kind": "bar",
+        "title": "How they heard about it",
+        "question_ids": ["prof_heard"]
+      },
+      {
+        "id": "heard_by_lead_time",
+        "kind": "stacked_bar",
+        "title": "Channels by booking lead time",
+        "question_ids": ["prof_heard"],
+        "cut": "booking_lead_time",
+        "notes": "Channel mix per lead-time band, from box office booking dates — shows which channels drive early sales vs last-minute seats."
+      },
+      {
+        "id": "who_they_came_with",
+        "kind": "bar",
+        "title": "Who they came with",
+        "question_ids": ["prof_companions"]
+      },
+      {
+        "id": "booking_motivation",
+        "kind": "bar",
+        "title": "What motivated the booking",
+        "question_ids": ["prof_motivation"],
+        "notes": "Multi-select: bars show share of respondents ticking each motivation; shares sum to more than 100%."
+      }
+    ]
+  },
+  "sample_dataset": {
+    "response_count": 226,
+    "questions": {
+      "prof_age": {
+        "type": "distribution",
+        "labels": ["Under 16", "16–24", "25–34", "35–44", "45–54", "55–64", "65–74", "75+"],
+        "counts": [4, 19, 32, 41, 47, 44, 29, 10]
+      },
+      "prof_gender": {
+        "type": "distribution",
+        "labels": ["Female", "Male", "Non-binary", "Prefer to self-describe", "Prefer not to say"],
+        "counts": [134, 72, 5, 2, 6],
+        "answered": 219
+      },
+      "prof_distance": {
+        "type": "distribution",
+        "labels": ["Less than 5 miles", "5–15 miles", "16–50 miles", "More than 50 miles"],
+        "counts": [96, 78, 39, 13]
+      },
+      "prof_first_visit": {
+        "type": "distribution",
+        "labels": [
+          "This was my first visit",
+          "I've been once or twice before",
+          "I visit a few times a year",
+          "I visit regularly"
+        ],
+        "counts": [61, 54, 68, 43]
+      },
+      "prof_heard": {
+        "type": "distribution",
+        "labels": [
+          "Email from the venue",
+          "Social media",
+          "Word of mouth",
+          "Print, poster or flyer",
+          "Press or a review",
+          "Venue website",
+          "Other"
+        ],
+        "counts": [63, 42, 49, 21, 12, 31, 8]
+      },
+      "prof_companions": {
+        "type": "distribution",
+        "labels": ["On my own", "Partner", "Family with children", "Friends", "An organised group"],
+        "counts": [24, 89, 41, 63, 9]
+      },
+      "prof_motivation": {
+        "type": "distribution",
+        "labels": [
+          "The performers or company",
+          "The subject or story",
+          "A recommendation",
+          "Something to do with family or friends",
+          "The venue itself",
+          "A ticket offer or the price"
+        ],
+        "counts": [92, 118, 64, 71, 45, 58],
+        "answered": 214
+      }
+    },
+    "cuts": {
+      "booking_lead_time": {
+        "segments": [
+          {
+            "key": "within_week",
+            "label": "Booked within a week of the event",
+            "n": 70,
+            "share": 0.31,
+            "questions": {
+              "prof_heard": {
+                "type": "distribution",
+                "labels": [
+                  "Email from the venue",
+                  "Social media",
+                  "Word of mouth",
+                  "Print, poster or flyer",
+                  "Press or a review",
+                  "Venue website",
+                  "Other"
+                ],
+                "counts": [12, 21, 17, 6, 4, 7, 3]
+              }
+            }
+          },
+          {
+            "key": "one_to_four_weeks",
+            "label": "Booked 1–4 weeks ahead",
+            "n": 95,
+            "share": 0.42,
+            "questions": {
+              "prof_heard": {
+                "type": "distribution",
+                "labels": [
+                  "Email from the venue",
+                  "Social media",
+                  "Word of mouth",
+                  "Print, poster or flyer",
+                  "Press or a review",
+                  "Venue website",
+                  "Other"
+                ],
+                "counts": [28, 15, 21, 10, 5, 13, 3]
+              }
+            }
+          },
+          {
+            "key": "over_four_weeks",
+            "label": "Booked more than 4 weeks ahead",
+            "n": 61,
+            "share": 0.27,
+            "questions": {
+              "prof_heard": {
+                "type": "distribution",
+                "labels": [
+                  "Email from the venue",
+                  "Social media",
+                  "Word of mouth",
+                  "Print, poster or flyer",
+                  "Press or a review",
+                  "Venue website",
+                  "Other"
+                ],
+                "counts": [23, 6, 11, 5, 3, 11, 2]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "example_narrative": {
+      "headline": "A local, loyal-leaning audience with a healthy 27% first-timer share — email fills the early seats, social media and word of mouth fill the late ones.",
+      "key_findings": [
+        "27% were first-time visitors and a further 24% had been once or twice — half the audience is still new to the venue, a strong development opportunity.",
+        "The audience is predominantly local: 77% travelled 15 miles or less, and the 45–64 age bands account for 40% of respondents.",
+        "Venue email is the single biggest channel overall (28%), but the mix shifts sharply with lead time: among bookings made more than four weeks out, email accounts for 38%, while within-a-week bookings are led by social media (30%) and word of mouth (24%).",
+        "The subject or story was the most common booking motivation (55% of those answering), ahead of the performers (43%) — worth reflecting in how similar events are copy-written."
+      ],
+      "caveats": [
+        "Profile figures describe the 226 survey respondents, not the full audience; survey respondents typically skew older and more engaged.",
+        "Booking lead time comes from box office data for the respondent's own booking; group bookings are attributed to the lead booker."
+      ]
+    }
+  }
+}
