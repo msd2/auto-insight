@@ -47,7 +47,8 @@ eslint + tsc + prettier), `make test` (pytest ×2, vitest ×1),
 plus `alembic upgrade head` (no-op, connects cleanly). Caveat: the remote
 container has no Docker daemon, so `docker-compose.yml` itself was not
 booted — Postgres was run directly (same image version/port/credentials).
-First CI run on push should confirm the compose-equivalent api job.
+CI run 29168127548 on this branch is **green** (api job incl. postgres:16
+service + pytest; web job incl. build), which covers the containerised path.
 
 Version pins that mattered: vitest 3 (vitest 2 bundles vite 5, conflicts
 with vite 6), uv pinned to Python 3.12 via `api/.python-version`.
