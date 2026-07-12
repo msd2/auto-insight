@@ -33,6 +33,9 @@ EXPECTED_TABLES = {
     "suppressions",
     "responses",
     "insight_reports",
+    # auth (WP 0.3)
+    "sessions",
+    "password_reset_tokens",
 }
 
 

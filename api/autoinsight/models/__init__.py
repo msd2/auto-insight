@@ -5,6 +5,7 @@ Importing this package registers every table on ``Base.metadata`` (Alembic's
 docs/02-architecture.md §Data model.
 """
 
+from autoinsight.models.auth import AuthSession, PasswordResetToken
 from autoinsight.models.base import Base, OrgOwned
 from autoinsight.models.boxoffice import (
     Attendance,
@@ -34,6 +35,7 @@ __all__ = [
     "Allocation",
     "AllocationStatus",
     "Attendance",
+    "AuthSession",
     "Base",
     "BoxOfficeConnection",
     "BoxOfficeProviderType",
@@ -50,6 +52,7 @@ __all__ = [
     "InvitationStatus",
     "OrgOwned",
     "Organisation",
+    "PasswordResetToken",
     "Response",
     "SurveyFocus",
     "SurveyTemplate",

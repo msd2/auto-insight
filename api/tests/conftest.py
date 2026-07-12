@@ -11,15 +11,23 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import asyncpg
+import httpx
 import pytest
 from alembic.config import Config
+from fastapi import APIRouter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from alembic import command
-from autoinsight.models import Base, Organisation
-from autoinsight.repositories import OrganisationRepository, OrgContext
+from autoinsight.adapters.email import LoggingEmailProvider, get_email_provider
+from autoinsight.auth.deps import AdminContextDep
+from autoinsight.auth.passwords import hash_password
+from autoinsight.db import get_session
+from autoinsight.main import create_app
+from autoinsight.models import Base, Organisation, User, UserRole
+from autoinsight.repositories import OrganisationRepository, OrgContext, UserRepository
+from autoinsight.repositories.deps import EventRepositoryDep
 
 API_DIR = Path(__file__).resolve().parent.parent
 PG_HOST = "localhost:5433"
@@ -96,3 +104,70 @@ def ctx_a(session: AsyncSession, org_a: Organisation) -> OrgContext:
 @pytest.fixture
 def ctx_b(session: AsyncSession, org_b: Organisation) -> OrgContext:
     return OrgContext(org_id=org_b.id, session=session)
+
+
+# --- auth fixtures ------------------------------------------------------------
+
+# One shared test password, hashed once (argon2 is deliberately slow).
+PASSWORD = "correct-horse-battery-staple"
+PASSWORD_HASH = hash_password(PASSWORD)
+
+
+async def make_user(
+    ctx: OrgContext,
+    email: str,
+    role: UserRole = UserRole.member,
+    name: str = "Test User",
+) -> User:
+    return await UserRepository(ctx).add(
+        User(email=email, name=name, role=role, password_hash=PASSWORD_HASH)
+    )
+
+
+@pytest.fixture
+async def admin_a(ctx_a: OrgContext) -> User:
+    return await make_user(ctx_a, "admin@org-a.example", role=UserRole.admin, name="Admin A")
+
+
+@pytest.fixture
+async def member_a(ctx_a: OrgContext) -> User:
+    return await make_user(ctx_a, "member@org-a.example", name="Member A")
+
+
+@pytest.fixture
+def email_provider() -> LoggingEmailProvider:
+    """Recording provider; tests assert on ``.outbox``."""
+    return LoggingEmailProvider()
+
+
+# Test-only routes proving the auth dependencies end-to-end: the admin role
+# gate, and the authed session-cookie → OrgContext → repository path.
+_test_router = APIRouter(prefix="/_test")
+
+
+@_test_router.get("/admin-only")
+async def _admin_only(auth: AdminContextDep) -> dict[str, str]:
+    return {"user": auth.user.email}
+
+
+@_test_router.get("/events")
+async def _list_events(events: EventRepositoryDep) -> list[str]:
+    return [str(event.id) for event in await events.list()]
+
+
+@pytest.fixture
+async def client(
+    session: AsyncSession, email_provider: LoggingEmailProvider
+) -> AsyncIterator[httpx.AsyncClient]:
+    """The real app over ASGI, sharing the test DB session, cookies enabled."""
+    app = create_app()
+    app.include_router(_test_router)
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_email_provider] = lambda: email_provider
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as http_client:
+        yield http_client

@@ -3,17 +3,18 @@
 Endpoint handlers depend on repositories (``UserRepositoryDep`` etc.), never
 on ``AsyncSession`` directly — the session only exists behind ``OrgContext``.
 
-``get_current_org_id`` is the auth seam: WP 0.3 replaces its body (or
-overrides the dependency) to resolve the organisation from the authenticated
-session cookie. Until then any endpoint requiring tenant data returns 401.
+``get_current_org_id`` resolves the organisation from the authenticated
+session cookie (a user row is per-org, so the session's user pins the org).
+Missing/invalid session → 401 before any repository is constructed.
 """
 
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autoinsight.auth.deps import AuthContext, get_auth_context
 from autoinsight.db import get_session
 from autoinsight.repositories.allocations import AllocationRepository
 from autoinsight.repositories.context import OrgContext
@@ -26,9 +27,11 @@ from autoinsight.repositories.users import UserRepository
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def get_current_org_id() -> uuid.UUID:
-    """Resolve the caller's organisation. Implemented by auth in WP 0.3."""
-    raise HTTPException(status_code=401, detail="Not authenticated")
+async def get_current_org_id(
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+) -> uuid.UUID:
+    """The authenticated caller's organisation (401 if not authenticated)."""
+    return auth.user.org_id
 
 
 async def get_org_context(
@@ -62,7 +65,7 @@ def get_invitation_repository(context: OrgContextDep) -> InvitationRepository:
 
 
 def get_organisation_repository(session: SessionDep) -> OrganisationRepository:
-    """Unscoped — for admin/seeding endpoints only (role-gated in WP 0.3)."""
+    """Unscoped — for internal admin/seeding paths only, never tenant routes."""
     return OrganisationRepository(session)
 
 

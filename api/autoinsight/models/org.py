@@ -3,7 +3,7 @@
 from typing import Any
 
 from sqlalchemy import Enum, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from autoinsight.models.base import Base, CreatedAtMixin, OrgOwned, UUIDPrimaryKeyMixin
 from autoinsight.models.enums import UserRole
@@ -27,5 +27,7 @@ class User(OrgOwned):
     email: Mapped[str]
     name: Mapped[str]
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"))
-    # Auth fields (populated by WP 0.3; nullable so seeding can precede auth).
+    # Argon2 hash; nullable so a user can be provisioned before setting a password.
     password_hash: Mapped[str | None]
+
+    organisation: Mapped[Organisation] = relationship()
