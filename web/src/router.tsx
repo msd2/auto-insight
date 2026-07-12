@@ -7,6 +7,8 @@ import {
 } from '@tanstack/react-router'
 import { AppShell } from './components/AppShell'
 import { DashboardPage } from './pages/Dashboard'
+import { DevPackPreviewPage } from './pages/DevPackPreview'
+import { DevPacksPage } from './pages/DevPacks'
 import { EventsPage } from './pages/Events'
 import { LoginPage } from './pages/Login'
 import { ReportsPage } from './pages/Reports'
@@ -53,8 +55,23 @@ const reportsRoute = createRoute({
   component: ReportsPage,
 })
 
+// Dev-only pack catalogue preview (WP 0.5) — outside the AppShell, not in nav.
+const devPacksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dev/packs',
+  component: DevPacksPage,
+})
+
+const devPackPreviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dev/packs/$slug',
+  component: DevPackPreviewPage,
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  devPacksRoute,
+  devPackPreviewRoute,
   appRoute.addChildren([dashboardRoute, eventsRoute, surveysRoute, reportsRoute]),
 ])
 
