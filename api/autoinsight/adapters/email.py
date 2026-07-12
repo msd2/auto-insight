@@ -1,7 +1,7 @@
 """EmailProvider adapter interface.
 
 Per the architecture: ``send(message) -> provider_message_id``. The first real
-implementation is SES (Phase 3, WP 3.2); until then the app uses
+implementation is Postmark (Phase 3, WP 3.2); until then the app uses
 ``LoggingEmailProvider``, which records and logs instead of sending. No
 email-provider-specific code may exist outside this package.
 """

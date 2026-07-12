@@ -107,7 +107,10 @@ Packs are versioned content, not code: question manifest + insight spec
 2. **Culture Counts response retrieval** — confirm the mechanism (API vs
    export) and latency for pulling responses keyed by hidden token. Phase 4
    spike.
-3. **Hosting** — SES for email pushes toward AWS; final call in Phase 0.
+3. **Hosting** — ~~SES for email pushes toward AWS; final call in Phase 0.~~
+   **Decided 2026-07-12**: DigitalOcean (App Platform + Managed Postgres),
+   with Postmark as the email provider — see `infra/README.md` and
+   `docs/02-architecture.md`.
 4. **Reminder emails** — one reminder to non-responders is standard and
    roughly doubles response volume; confirm we're comfortable with the PECR
    posture (still research-only content). Default: on, 3 days after invite.
