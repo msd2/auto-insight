@@ -38,6 +38,45 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://autoinsight:autoinsight@localhost:5433/autoinsight
 
+  # Proves that the Alembic migration chain applies from scratch against a
+  # clean Postgres 16 (the service container starts empty every run). Passes
+  # trivially while api/alembic/versions/ is empty (upgrade head is a no-op
+  # that still exercises config + DB connectivity) and keeps working as
+  # migrations accumulate.
+  migrations:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: autoinsight
+          POSTGRES_PASSWORD: autoinsight
+          POSTGRES_DB: autoinsight
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U autoinsight -d autoinsight"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - name: Apply all migrations to a clean database
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://autoinsight:autoinsight@localhost:5433/autoinsight
+      - name: Show resulting revision
+        run: uv run alembic current --verbose
+        env:
+          DATABASE_URL: postgresql+asyncpg://autoinsight:autoinsight@localhost:5433/autoinsight
+
   web:
     runs-on: ubuntu-latest
     defaults:

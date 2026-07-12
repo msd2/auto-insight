@@ -1,0 +1,153 @@
+# Deploy to staging — WP 0.4 (AUTHORING ONLY, currently inert)
+#
+# ── How the gate works ──────────────────────────────────────────────────────
+# There is no AWS account yet, so every AWS-touching job is guarded with
+#
+#     if: vars.AWS_DEPLOY_ENABLED == 'true'
+#
+# `AWS_DEPLOY_ENABLED` is a **repository variable** (Settings → Secrets and
+# variables → Actions → Variables). It does not exist yet, so the expression
+# evaluates to '' == 'true' → false and the deploy job is SKIPPED on every
+# push to main. Nothing here can fail or touch AWS until someone explicitly
+# creates that variable with the value `true`.
+#
+# A repository variable is used for the gate (not a secret) because the
+# `secrets` context is not available in job-level `if:` expressions, and
+# environment-level variables are not resolved until after a job has been
+# scheduled into its environment — a repo-level variable is the only thing
+# GitHub lets us test before the job starts.
+#
+# The deploy job additionally declares `environment: staging`. Credentials
+# and config are read from that GitHub environment (secrets: AWS_ROLE_ARN;
+# variables: AWS_REGION), so:
+#   * flipping the gate on without also creating the `staging` environment
+#     fails fast at the credentials step rather than half-deploying, and
+#   * any protection rules (required reviewers, branch restriction) added to
+#     the `staging` environment are enforced automatically.
+#
+# ── To arm this workflow (see infra/README.md §Unblocking deployment) ───────
+#   1. Apply the Terraform in infra/ (creates ECR repo, ECS cluster/services,
+#      RDS, and the GitHub OIDC deploy role).
+#   2. Create GitHub environment `staging` with:
+#        secret  AWS_ROLE_ARN  = arn of the Terraform-created deploy role
+#        variable AWS_REGION   = the chosen region (e.g. eu-west-2)
+#   3. Create repository variable AWS_DEPLOY_ENABLED = true.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy to staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two staging deploys at once; queue (don't cancel) in-flight ones
+# so a deploy is never killed mid-migration.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC token for aws-actions/configure-aws-credentials
+  contents: read
+
+env:
+  ECR_REPOSITORY: autoinsight-api # matches aws_ecr_repository.api in infra/ecr.tf
+
+jobs:
+  # Always runs (even while the gate is off) so a push to main leaves a
+  # visible record of whether a deploy was attempted or deliberately skipped.
+  gate-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report deploy gate state
+        run: |
+          if [ "${{ vars.AWS_DEPLOY_ENABLED }}" = "true" ]; then
+            echo "::notice::AWS_DEPLOY_ENABLED=true — staging deploy will run."
+          else
+            echo "::notice::Staging deploy SKIPPED: repository variable AWS_DEPLOY_ENABLED is not 'true' (no AWS account/credentials configured yet). See .github/workflows/deploy-staging.yml header and infra/README.md."
+          fi
+
+  deploy:
+    # THE GATE — see the header comment. Until the repository variable
+    # AWS_DEPLOY_ENABLED is created with value 'true', this job never runs.
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: staging # secrets/vars + protection rules come from here
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — no long-lived keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Build & push image ────────────────────────────────────────────────
+      # One image serves both api and worker (same codebase, different
+      # command — see infra/runtime.tf task definitions).
+      # TODO(wp0.4-execution): api/Dockerfile does not exist yet. Author it
+      # when the AWS account lands (uv-based multi-stage build, python:3.12
+      # slim runtime, uvicorn entrypoint overridable for the worker).
+      - name: Build and push api image
+        run: |
+          IMAGE="${{ steps.ecr-login.outputs.registry }}/${ECR_REPOSITORY}"
+          docker build -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:staging" api/
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:staging"
+
+      # ── Apply infrastructure ──────────────────────────────────────────────
+      # TODO(wp0.4-execution): decide whether CI applies Terraform or whether
+      # infra changes stay manual (recommended for the pilot: manual
+      # `terraform apply` from a laptop; CI only deploys application code —
+      # see infra/README.md §Deploy flow). If CI applies, add:
+      #   - hashicorp/setup-terraform@v3
+      #   - terraform -chdir=infra init
+      #   - terraform -chdir=infra plan -var-file=envs/staging.tfvars
+      #   - terraform -chdir=infra apply -auto-approve (or plan-only + manual)
+      - name: Terraform (placeholder)
+        run: echo "TODO(wp0.4-execution) — infra applied manually for now; see infra/README.md"
+
+      # ── Run migrations ────────────────────────────────────────────────────
+      # RDS is not publicly reachable, so migrations run *inside* the VPC as
+      # a one-off Fargate task using the image just pushed.
+      # TODO(wp0.4-execution): fill in real subnet/SG ids (Terraform outputs)
+      # and wait/poll for task exit status; fail the deploy on non-zero exit.
+      - name: Run database migrations (one-off ECS task)
+        run: |
+          echo "TODO(wp0.4-execution): aws ecs run-task \\"
+          echo "  --cluster autoinsight-staging \\"
+          echo "  --launch-type FARGATE \\"
+          echo "  --task-definition autoinsight-staging-api \\"
+          echo "  --network-configuration '<subnets/security groups from terraform output>' \\"
+          echo "  --overrides '{\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"alembic\",\"upgrade\",\"head\"]}]}'"
+          echo "  ...then aws ecs wait tasks-stopped + check exit code"
+
+      # ── Roll the services ─────────────────────────────────────────────────
+      # Runtime decision recorded in infra/README.md: ECS Fargate, two
+      # services (api + worker) off the same image. force-new-deployment
+      # re-pulls the :staging tag.
+      # TODO(wp0.4-execution): switch to registering a new task definition
+      # revision pinned to ${GITHUB_SHA} instead of the mutable :staging tag
+      # (better rollback story), then update-service to that revision.
+      - name: Deploy api + worker services
+        run: |
+          aws ecs update-service --cluster autoinsight-staging \
+            --service autoinsight-staging-api --force-new-deployment
+          aws ecs update-service --cluster autoinsight-staging \
+            --service autoinsight-staging-worker --force-new-deployment
+          aws ecs wait services-stable --cluster autoinsight-staging \
+            --services autoinsight-staging-api autoinsight-staging-worker
+
+      # TODO(wp0.4-execution): web/ SPA hosting (S3+CloudFront vs served by
+      # the api container) is undecided — add its build/upload step here once
+      # infra/README.md records the decision.
+      - name: Smoke check
+        run: |
+          echo "TODO(wp0.4-execution): curl https://<staging-domain>/health and assert database:ok"
