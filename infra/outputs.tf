@@ -8,6 +8,11 @@ output "app_live_url" {
   value       = digitalocean_app.main.live_url
 }
 
+output "app_fqdn" {
+  description = "Custom hostname (empty until manage_dns=true)."
+  value       = local.app_fqdn
+}
+
 output "db_cluster_id" {
   value = digitalocean_database_cluster.main.id
 }

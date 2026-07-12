@@ -152,9 +152,20 @@ resource "digitalocean_app" "main" {
     # the connection URL is composed in Terraform, so attaching would only
     # duplicate trust management.
 
-    # TODO(wp0.4-execution): custom domain + alerts once Marc provides the
-    # domain:
-    # domain { name = "staging.<domain>" zone = "<domain>" type = "PRIMARY" }
-    # alert { rule = "DEPLOYMENT_FAILED" }
+    # Custom domain — appears only once manage_dns=true (Marc has a domain
+    # and its NS are delegated to DO). `zone` is deliberately NOT set: the
+    # DNS record is managed explicitly in dns.tf; setting zone here would
+    # make App Platform manage the record too and the two would collide.
+    dynamic "domain" {
+      for_each = var.manage_dns ? [1] : []
+      content {
+        name = local.app_fqdn
+        type = "PRIMARY"
+      }
+    }
+
+    alert {
+      rule = "DEPLOYMENT_FAILED"
+    }
   }
 }

@@ -18,19 +18,28 @@ terraform {
   # DigitalOcean has no native Terraform backend; the standard approach is a
   # DO Spaces bucket via the s3-compatible backend (the skip_* flags disable
   # AWS-specific validation the backend would otherwise attempt).
-  # Bootstrap order (see README.md §Bootstrap):
-  #   1. Create a Spaces bucket + Spaces access key in the chosen region.
-  #   2. Uncomment, adjust names, export AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
-  #      to the Spaces key pair, run `terraform init -migrate-state`.
-  # Until then Terraform falls back to harmless local state, which is fine
-  # because there is nothing to manage yet.
+  #
+  # The bucket + Spaces key are THEMSELVES Terraform-managed, by the one-shot
+  # local-state config in infra/bootstrap/ (see its header for the
+  # chicken-and-egg). Wiring, per README.md §Bootstrap:
+  #   bucket    = bootstrap output `state_bucket_name`
+  #   endpoints = bootstrap output `state_bucket_endpoint`
+  #   creds     = bootstrap outputs `spaces_access_key_id` /
+  #               `spaces_secret_access_key`, exported as
+  #               AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (s3-backend quirk:
+  #               AWS_* names, Spaces credentials)
+  # then uncomment and `terraform init -migrate-state`. Until then Terraform
+  # falls back to harmless local state — fine, nothing exists to manage yet.
+  #
+  # NOTE: Spaces has no lon1 region — the bucket lives in ams3 (state access
+  # is not latency-sensitive; see infra/bootstrap/main.tf).
   #
   # backend "s3" {
-  #   bucket = "autoinsight-terraform-state"       # TODO: create in Spaces
+  #   bucket = "autoinsight-terraform-state"       # = bootstrap state_bucket_name
   #   key    = "staging/terraform.tfstate"         # per-environment key
   #   region = "us-east-1"                         # dummy; required by the backend, ignored by Spaces
   #   endpoints = {
-  #     s3 = "https://lon1.digitaloceanspaces.com" # TODO: confirm region with Marc
+  #     s3 = "https://ams3.digitaloceanspaces.com" # = bootstrap state_bucket_endpoint
   #   }
   #   skip_credentials_validation = true
   #   skip_requesting_account_id  = true

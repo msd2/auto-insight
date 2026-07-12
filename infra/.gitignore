@@ -1,0 +1,13 @@
+# Terraform — state (CONTAINS SECRETS: DB password in root state, DO token
+# in infra/github state, Spaces key in infra/bootstrap state), local
+# workdirs, and secret-bearing var files must never be committed.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+# .terraform.lock.hcl is deliberately NOT ignored — commit it after the
+# first terraform init so provider versions are pinned in git.
+!envs/*.tfvars
+*.auto.tfvars
+secret*.tfvars
+crash.log

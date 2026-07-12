@@ -1,5 +1,5 @@
 variable "region" {
-  description = "DigitalOcean datacenter region for the database (and Spaces). TODO: lon1 (London) assumed — Marc to confirm."
+  description = "DigitalOcean datacenter region for the database. TODO: lon1 (London) assumed — Marc to confirm. (The Terraform-state Spaces bucket lives in ams3 — Spaces has no lon1; see infra/bootstrap/.)"
   type        = string
   default     = "lon1"
 }
@@ -38,6 +38,32 @@ variable "deploy_on_push" {
   description = "Native App Platform CD: rebuild + redeploy on every push to github_branch. true for staging (this IS the staging CD mechanism); false for production (manual promote only)."
   type        = bool
   default     = true
+}
+
+# ── DNS (all default-off so applies work before a domain exists) ───────────
+
+variable "manage_dns" {
+  description = "Create the app's DNS record + attach the custom domain to the app. Leave false until Marc provides a domain AND its nameservers are delegated to DigitalOcean (see dns.tf header)."
+  type        = bool
+  default     = false
+}
+
+variable "domain" {
+  description = "Apex domain (e.g. autoinsight.example) once it exists. Only read when manage_dns = true."
+  type        = string
+  default     = ""
+}
+
+variable "create_domain_zone" {
+  description = "Create the digitalocean_domain zone itself. true in exactly ONE environment (staging) — the zone is account-wide and the environments must not both claim it."
+  type        = bool
+  default     = false
+}
+
+variable "app_subdomain" {
+  description = "Subdomain for the app hostname. Empty = the environment name (staging.<domain>); production sets app_subdomain = \"app\"."
+  type        = string
+  default     = ""
 }
 
 # ── Database ────────────────────────────────────────────────────────────────

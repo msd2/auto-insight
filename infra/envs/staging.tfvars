@@ -16,3 +16,11 @@ deploy_on_push = true
 db_size               = "db-s-1vcpu-1gb"
 api_instance_count    = 1
 worker_instance_count = 1
+
+# DNS — off until Marc provides a domain and delegates its nameservers to
+# DigitalOcean (registrar-side NS change; see dns.tf). Then:
+#   domain             = "<the domain>"
+#   manage_dns         = true
+#   create_domain_zone = true   # staging owns the account-wide zone resource
+manage_dns         = false
+create_domain_zone = false
