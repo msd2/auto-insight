@@ -1,6 +1,6 @@
 # STATUS — Phase 0 execution
 
-Last updated: 2026-07-11 (WP 0.1 landed).
+Last updated: 2026-07-12 (wave 2 landed — Phase 0 code work complete).
 Read `CLAUDE.md` first if you haven't. This doc is the live state of Phase 0
 (`docs/03-roadmap.md`) and must be updated whenever a work package lands.
 
@@ -8,18 +8,59 @@ Read `CLAUDE.md` first if you haven't. This doc is the live state of Phase 0
 
 | WP | Task # | State |
 |---|---|---|
-| 0.1 Repo scaffold | #1 | **DONE** — see "WP 0.1 notes" below. The prior background agent's work never landed; rebuilt from spec. |
-| 0.2 Schema & tenancy | #2 | Not started (wave 2) |
-| 0.3 Auth & membership | #3 | Not started (wave 2) |
-| 0.4 Deploy pipeline authoring | #4 | Not started (wave 2). AWS *deployment* is blocked on account/credentials — authoring only for now. |
-| 0.5 Pack content | #5 | **DONE**, committed `ecd4e8a`. Preview UI wiring remains (wave 2, agent C). |
+| 0.1 Repo scaffold | #1 | **DONE** (PR #1, merged). Rebuilt from spec — the earlier background agent's work never landed. |
+| 0.2 Schema & tenancy | #2 | **DONE**, commit `4adb02d`. 16-table baseline migration `d5d0e6b3dd72`; OrgContext repositories; tenancy + drift tests. |
+| 0.3 Auth & membership | #3 | **DONE** — see "Wave 2 notes". Sessions/reset migration `cc8b261a61d9`; argon2; seed CLI; 33 api tests. |
+| 0.4 Deploy pipeline authoring | #4 | **DONE (authoring)**, commit `e7248f5`. Execution blocked on Marc (AWS account etc. — see infra/README.md). |
+| 0.5 Pack content | #5 | **DONE** — content `ecd4e8a` (wave 1) + preview wiring `582629a` (wave 2): /dev/packs renders all 4 packs from sample data. |
 
-Git: remote `origin` = github.com:msd2/auto-insight. Wave-1 commits on
-`main`: `c79266c` (planning docs), `ecd4e8a` (wp0.5 content), `41256fe` +
-`a7cce01` (handoff docs). WP 0.1 was developed on branch
-`claude/status-docs-review-jquyqc` (remote-session designated branch) — merge
-to `main` before starting wave 2. Convention: one checkpoint commit per
-verified WP, message prefix `wp<N.n>:`.
+**Phase 0 exit criterion verified 2026-07-12** on a fresh database: alembic
+upgrade head → `seed-org` CLI → api boot → `POST /auth/login` (session
+cookie) → `GET /auth/me` returns user/org/role; unauthenticated → 401; and
+`make lint` + `make test` green on the merged tree. What Phase 0 still needs
+is *staging deployment*, which is the blocked WP 0.4 execution — everything
+buildable without AWS is done.
+
+Git: remote `origin` = github.com:msd2/auto-insight. Wave 2 was developed on
+`claude/status-docs-review-jquyqc` (remote-session designated branch), one
+checkpoint commit per verified WP (`wp<N.n>:` prefix): `e7248f5` (wp0.4),
+`582629a` (wp0.5 preview), `4adb02d` (wp0.2), wp0.3 on top. Merge to `main`
+via PR when ready; CI runs on `claude/**` pushes and PRs.
+
+## Wave 2 notes
+
+- **WP 0.2** — all 16 architecture-doc tables as typed SQLAlchemy 2 models
+  (abstract `OrgOwned` supplies non-null indexed `org_id`); baseline
+  migration `d5d0e6b3dd72` (autogen then hand-cleaned; downgrade verified;
+  a test proves zero model↔schema drift). Repositories: frozen `OrgContext`,
+  generic `OrgScopedRepository` (every query org-filtered, `add()` stamps
+  org_id, cross-org update/delete return None/False), concrete repos with
+  ownership checks on FK targets, unscoped `OrganisationRepository` for
+  seeding; `repositories/deps.py` gives endpoints repositories, never
+  sessions.
+- **WP 0.3** — server-side sessions + single-use password-reset tokens
+  (migration `cc8b261a61d9`; DB stores SHA-256 of opaque tokens). argon2id
+  (argon2-cffi). Endpoints: /auth/login, /auth/logout, /auth/me,
+  /auth/password-reset/{request,confirm}. Email unique per org; multi-org
+  email logs in with `org_slug` (documented in `auth/__init__.py`).
+  `EmailProvider` adapter interface + logging stub in
+  `api/autoinsight/adapters/` (SES is Phase 3). Seed:
+  `uv run python -m autoinsight.cli seed-org --name X --slug x --email e
+  --user-name N --password p` (idempotent by slug).
+- **WP 0.4** — CI `migrations` job (clean-DB alembic upgrade);
+  `deploy-staging.yml` gated behind `AWS_DEPLOY_ENABLED` repo variable +
+  `staging` GitHub environment (OIDC role, no stored keys); `infra/`
+  Terraform skeleton. **Recommendation: ECS Fargate for api+worker** (App
+  Runner can't host the non-HTTP Procrastinate worker). `terraform validate`
+  not yet run (no terraform in the authoring env).
+- **WP 0.5 preview** — `/dev/packs` + `/dev/packs/$slug` (outside AppShell)
+  glob-import pack JSON from `content/` (no duplication); typed aggregate
+  contract + data-driven Recharts components (seed of WP 2.1); per-pack
+  Vitest smoke tests driven by the same glob.
+- Toolchain note: remote container has no Docker daemon — Postgres 16 runs
+  directly on port 5433 for tests (same credentials as compose). vitest
+  pinned to v3 (v2 bundles vite 5). `procrastinate[psycopg]` extra warning:
+  procrastinate 3.9 has no `psycopg` extra — tidy the spec in a future WP.
 
 ## WP 0.1 notes
 
@@ -53,46 +94,30 @@ service + pytest; web job incl. build), which covers the containerised path.
 Version pins that mattered: vitest 3 (vitest 2 bundles vite 5, conflicts
 with vite 6), uv pinned to Python 3.12 via `api/.python-version`.
 
-## Wave 2 (after wp0.1 commit) — three parallel agents, disjoint paths
+## Next up
 
-Approved plan (full text: `/Users/marc.dunford/.claude/plans/giggly-tickling-kahan.md`):
+Phase 0 code work is complete. What remains before Phase 1 starts:
 
-- **Agent A — `api/` only, WP 0.2 then 0.3 sequentially.** 0.2: SQLAlchemy
-  models + first Alembic migration for the entire data model in
-  `docs/02-architecture.md` §Data model; `OrgContext`-scoped repository
-  layer; tests (against compose Postgres) proving cross-org access is
-  impossible through the layer. 0.3: email+password auth (argon2/bcrypt),
-  secure session cookies, password reset with email send stubbed behind the
-  `EmailProvider` interface, member/admin roles, login/logout/me endpoints,
-  CLI seed command (`python -m autoinsight.cli seed-org`), auth tests. No
-  self-serve signup.
-- **Agent B — `.github/` + `infra/` only, WP 0.4 authoring.** CI
-  migration-check job; gated deploy-to-staging workflow (no-op without AWS
-  secrets); Terraform skeleton; infra/README.md records the App Runner vs ECS
-  recommendation and the manual promote step.
-- **Agent C — `web/src` + at most one new api route, WP 0.5 preview wiring.**
-  Dev catalogue preview route rendering each pack in `content/packs/*/v1.json`
-  from its `sample_dataset` (Recharts) + `example_narrative`; Vitest smoke
-  test per pack. Read `content/README.md` first — the aggregate shapes there
-  are the canonical chart-data contract (also used by Phase 5 real
-  aggregation). Key format notes: distribution aggregates are
-  `{labels, counts}` mapping straight to Recharts; NPS has `counts_by_score`
-  + precomputed `score`; free text has `{answered, snippets[]}`; cuts are
-  `cuts.<key>.segments[]`; multi_choice percentages use `answered` as
-  denominator, not sum of counts; `example_themes`/`example_narrative` are
-  preview-only.
-
-Then integration verification (coordinator, not agents): `make lint && make
-test` on merged tree; compose db → `alembic upgrade head` → seed CLI → boot
-api → curl login/me with session cookie → web build with preview route. That
-end-to-end path is the Phase 0 exit criterion ("logged-in user in a seeded
-org sees the app shell"). Checkpoint commit per WP; update tasks #1–#4.
+1. **WP 0.4 execution** (blocked on Marc, item 1 below): AWS account →
+   bootstrap `terraform apply` → GitHub environment + `AWS_DEPLOY_ENABLED`
+   → first staging deploy. Checklist in `infra/README.md` §"Unblocking
+   actual deployment". The Phase 0 exit line ("logged-in user in a seeded
+   org sees the app shell **on staging**") closes when this lands.
+2. **Phase 1 wave planning**: WP 1.1 Spektrix adapter and 1.2 sync engine
+   are the next buildable WPs (1.1 first — 1.2 depends on it); 1.3/1.4 UI
+   can follow in parallel once the adapter's shape settles.
+3. Small tidy: `procrastinate[psycopg]` extra no longer exists in
+   procrastinate 3.9 — fix the pyproject spec alongside the first real job
+   in WP 1.2.
+4. `/login` is still a placeholder page — wire the real form to /auth/login
+   when Phase 1 UI work opens `web/` again (was out of wave-2 scope).
 
 ## Blocked on Marc (only he can unblock)
 
-1. **AWS account/credentials + hosting decision** → actual staging deploy
-   (WP 0.4 execution). A new blocked task should be created when 0.4
-   authoring completes.
+1. **AWS account/credentials** → staging deploy (WP 0.4 execution). Full
+   list of the six required items: `infra/README.md` §"Unblocking actual
+   deployment" (account, region, bootstrap creds, `staging` environment
+   with `AWS_ROLE_ARN`/`AWS_REGION`, `AWS_DEPLOY_ENABLED` variable, domain).
 2. **Pack question sign-off** against real Culture Counts question banks
    (`content/` wording is DRAFT) — gates Phase 2 WPs 2.1/2.2.
 3. Pilot org shortlist + product name (open questions in
@@ -100,8 +125,8 @@ org sees the app shell"). Checkpoint commit per WP; update tasks #1–#4.
 
 ## Environment notes
 
-- Session task list (#1–#5) mirrors this table; keep both in sync.
-- Remote is github.com:msd2/auto-insight — once the CI workflow lands, check
-  the Actions run after pushing (`gh run watch`); don't claim CI green
-  without a green run.
-- Postgres via `docker-compose up -d db` on host port 5433.
+- Remote is github.com:msd2/auto-insight — check the Actions run after
+  pushing; don't claim CI green without a green run. (No `gh` CLI in the
+  remote container; use the GitHub MCP tools there.)
+- Postgres via `docker-compose up -d db` on host port 5433 locally; in the
+  remote container (no Docker daemon) run Postgres 16 directly on 5433.
