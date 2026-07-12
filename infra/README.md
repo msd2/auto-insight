@@ -1,118 +1,157 @@
-# infra/ — AWS infrastructure (Terraform)
+# infra/ — DigitalOcean infrastructure (Terraform)
 
-Status: **WP 0.4 authoring only.** No AWS account exists; nothing here has
-ever been applied, and `terraform validate` has **not** been run (Terraform is
-not installed in the authoring environment — run `terraform init &&
-terraform validate` as the first act once an account exists, and expect to
-fix nits). The GitHub Actions deploy workflow
-(`.github/workflows/deploy-staging.yml`) is gated off until secrets exist —
-see its header comment for exactly how the gate works.
+Status: **WP 0.4 authoring only.** No DigitalOcean account exists; nothing
+here has ever been applied, and `terraform validate` has **not** been run
+(Terraform is not installed in the authoring environment — every `.tf` file
+parses with python-hcl2, but run `terraform init && terraform validate` as
+the first act once an account exists and expect to fix nits). The GitHub
+workflow (`.github/workflows/deploy-staging.yml`) is gated off until the
+token exists — see its header comment for exactly how the gate works.
+
+> History: this directory originally held an AWS skeleton (ECS Fargate + RDS
+> + SES). Marc redirected hosting to DigitalOcean and email to Postmark on
+> 2026-07-12; the AWS files were replaced wholesale. The decision record
+> below covers both the AWS routes we abandoned and the DO alternatives.
 
 Layout: a single root module, parameterised by `environment`, with one state
-file and one tfvars per environment (`envs/staging.tfvars`,
+key and one tfvars per environment (`envs/staging.tfvars`,
 `envs/production.tfvars`). Files are per concern:
 
 | File | Concern |
 |---|---|
-| `versions.tf` | terraform/provider pins; S3 state backend (commented until account exists) |
-| `providers.tf` | AWS provider + default tags |
-| `variables.tf` | all knobs, pilot-sized defaults |
-| `networking.tf` | **default VPC decision** + app security group; ALB commented TODO |
-| `rds.tf` | Postgres 16 (RDS-managed master password → Secrets Manager) |
-| `ecr.tf` | one image repo (api + worker share the image) + lifecycle policy |
-| `runtime.tf` | ECS Fargate cluster, api + worker task definitions and services |
-| `iam.tf` | ECS execution/task roles; GitHub OIDC provider + deploy role |
-| `secrets.tf` | Secrets Manager containers (values set out-of-band); SSM convention |
-| `ses.tf` | Phase 3 placeholder, fully commented |
-| `outputs.tf` | values CI and bootstrap need |
+| `versions.tf` | terraform/provider pins; Spaces (s3-compatible) state backend, commented until account exists |
+| `providers.tf` | DO provider — token via `DIGITALOCEAN_TOKEN` env var, never in files |
+| `variables.tf` | all knobs, pilot-sized defaults; region `lon1`/`lon` assumed, Marc to confirm |
+| `database.tf` | Managed Postgres 16 (smallest tier), app db + user, app-only firewall, composed `DATABASE_URL` |
+| `app.tf` | the App Platform app: api service, Procrastinate **worker**, `PRE_DEPLOY` migrate job, web static site, `/api` ingress |
+| `docker/api.Dockerfile` | one uv-based image for api/worker/migrate (repo-root build context) |
+| `outputs.tf` | app id/URL for doctl + bootstrap |
+| `envs/*.tfvars` | per-environment knobs (staging tracks `main`; production tracks `production` branch) |
 
-## Runtime decision: App Runner vs ECS Fargate
+Email (Postmark) is deliberately **not** Terraform-managed: Postmark has no
+first-party Terraform provider worth depending on, and Phase 3 needs exactly
+one account, per-sender-domain DKIM/return-path DNS records, and a server
+token that lands as an App Platform SECRET env var (`POSTMARK_SERVER_TOKEN`,
+placeholder noted in `app.tf`). That's console + DNS runbook territory —
+tracked in the roadmap's Phase 3 non-code row.
 
-**RECOMMENDATION: ECS Fargate for both api and worker.**
+## Runtime decision
 
-The deciding fact is the worker. It is a long-running Procrastinate consumer
-(`procrastinate --app=autoinsight.worker.app worker`) that polls Postgres —
-it serves no HTTP. App Runner only hosts request-serving applications: it
-requires a port that answers health checks, scales on request concurrency,
-and (critically) **throttles container CPU when no requests are in flight**,
-which would silently starve a background worker precisely when it has no
-traffic — i.e. always. The workarounds (bolt a dummy HTTP server onto the
-worker and ping it to keep CPU allocated, or run api on App Runner and the
-worker somewhere else) either fight the platform or leave us operating two
-runtimes anyway. Since we must run ECS (or similar) for the worker
-regardless, the *simplest* system is one Fargate cluster running two
-services from one image — one deploy pipeline, one IAM/networking/logging
-story, and the same `run-task` mechanism gives us one-off migration tasks
-for free. App Runner's genuine advantages (built-in HTTPS endpoint, faster
-first deploy) only ever applied to the api half, and are offset by needing
-an ALB + ACM cert once anyway for a custom domain. Fargate at pilot size
-(2 × 0.25 vCPU/512 MiB, ~$25–30/mo + ALB ~$20/mo + RDS t4g.micro ~$15/mo)
-is well within pilot budget.
+**DECIDED: DigitalOcean App Platform (+ DO Managed Postgres 16).**
 
-Also considered and rejected for the pilot: EC2 (undifferentiated server
-admin), Lambda (the worker is a persistent poller; FastAPI-on-Lambda adds
-cold-start and packaging friction), Elastic Beanstalk (legacy posture).
+The shape of the problem: one HTTP api, one **long-running non-HTTP
+Procrastinate worker**, a static SPA, migrations on deploy, one small
+Postgres. The worker is what kills most "simple" platforms — it serves no
+requests, so anything that only hosts request-serving apps (AWS App Runner
+throttles CPU outside request handling; same story for most PaaS web tiers)
+either starves it or forces a second runtime.
+
+**App Platform fits exactly** because it has a first-class **worker
+component**: same build, same env, no port, no health-check contortions, CPU
+never throttled. One app spec gives us all four components (api service,
+worker, `PRE_DEPLOY` migration job, static site) plus native GitHub CD, TLS,
+and a CDN for the SPA — things the AWS design needed an ALB, ACM, ECR, OIDC
+roles, one-off `run-task` wiring and ~15 Terraform resources to approximate.
+The infra surface dropped from eleven .tf files to four meaningful ones.
+
+Rejected alternatives:
+
+- **AWS ECS Fargate** (the previous recommendation, and the best AWS
+  option): workable, and the earlier analysis stands *within AWS* — but it
+  carries VPC/ALB/IAM/ECR/OIDC plumbing that is pure overhead at pilot
+  scale. With SES gone (→ Postmark), the "email already pulls us to AWS"
+  rationale is dead, and nothing else does.
+- **AWS App Runner**: rejected earlier for the worker-CPU-throttling reason
+  above; DO's worker component is precisely the thing it lacked.
+- **DOKS (managed Kubernetes)**: strictly more moving parts (cluster
+  upgrades, ingress controller, manifests/Helm, registry) for zero pilot
+  benefit.
+- **Droplets**: cheapest raw compute but hand-rolled deploys, TLS, process
+  supervision, patching — undifferentiated server admin the pilot shouldn't
+  fund.
+
+**Build decisions** (also in `app.tf`'s header): App Platform builds
+**straight from the GitHub repo** via its native integration — no DOCR, no
+CI-built images; `deploy_on_push` on `main` *is* the staging CD mechanism,
+and there's one less registry and token to manage. Build method is a
+**Dockerfile** (`docker/api.Dockerfile`), not buildpacks, because the api is
+uv-managed (uv.lock, no requirements.txt) and DO's Python buildpack doesn't
+speak uv; the web static site does use the Node buildpack, which fits npm
+exactly.
+
+**Estimated pilot cost**: api + worker at basic-xxs ($5/mo each) + managed
+PG db-s-1vcpu-1gb ($15/mo) + static site (free tier) ≈ **$30–40/mo**, plus
+Postmark ~$15/mo (10k emails). Comparable AWS build-out was ~$60–65/mo with
+far more to operate.
 
 ## Deploy flow (once armed)
 
-1. Merge to `main` → `deploy-staging.yml` runs: build image → push
-   `:sha` + `:staging` to ECR → one-off Fargate task runs
-   `alembic upgrade head` → `ecs update-service --force-new-deployment` for
-   api + worker.
-2. Infra changes (this directory) are applied **manually** (`terraform apply
-   -var-file=envs/staging.tfvars`) for the pilot; CI deploys application code
-   only. Revisit if infra churn becomes frequent.
-3. Web SPA hosting is TODO(wp0.4-execution): S3+CloudFront vs serving the
-   built SPA from the api container. Decide when the domain exists.
+1. Merge to `main` → **App Platform itself** detects the push (GitHub
+   integration, `deploy_on_push=true`), rebuilds all components, runs the
+   `migrate` PRE_DEPLOY job (`alembic upgrade head` — a failed migration
+   aborts the rollout), and rolls the app. There is no CI-side deploy step.
+2. `.github/workflows/deploy-staging.yml` is therefore an **observer, not a
+   deployer**: gated on `DO_DEPLOY_ENABLED`, it uses doctl to wait for the
+   deployment DO triggered for this push and fails the check if that
+   deployment fails — so a red deploy is visible on the commit in GitHub,
+   not just in the DO console. `workflow_dispatch` can also force a
+   redeploy (`doctl apps create-deployment`).
+3. Infra changes (this directory) are applied **manually** (`terraform apply
+   -var-file=envs/staging.tfvars`) for the pilot; nothing in CI holds a
+   write-scope token beyond the observer's read/redeploy needs.
 
 ## Promote to production (manual, deliberate)
 
-Production is never deployed automatically. To promote:
+Production is a **second App Platform app + database cluster** (same module,
+`envs/production.tfvars`, separate state key) tracking a `production`
+branch. Nothing reaches it automatically. To promote:
 
-1. Pick the staging-verified image: the `:<git sha>` tag currently running on
-   staging (`aws ecs describe-services` → task definition → image).
-2. Provision/refresh production infra:
-   `terraform init -backend-config="key=production/terraform.tfstate" &&
-   terraform apply -var-file=envs/production.tfvars -var image_tag=<sha>`
-   (first production apply must also revisit the hardening TODOs flagged in
-   `envs/production.tfvars` and `rds.tf`).
-3. Run migrations against production via the same one-off task pattern.
-4. `aws ecs update-service --force-new-deployment` for both services (or let
-   the task-definition change from step 2 roll them).
-5. Smoke-check `/health` and record the promoted sha in `docs/STATUS.md`.
-
-A `deploy-production.yml` with a `workflow_dispatch` sha input + required
-reviewers on a `production` GitHub environment is the intended end state;
-authoring it is deferred until staging has actually deployed once.
+1. Verify staging is green at the sha you want (staging app + this repo's CI).
+2. Fast-forward the `production` branch to that sha and push:
+   `git push origin <sha>:production`. That push is the deliberate promote
+   action — App Platform rebuilds production from it, runs migrations
+   (PRE_DEPLOY job), and rolls out. (If a branch push feels too easy a
+   trigger, set `deploy_on_push=false` in production.tfvars and use
+   `doctl apps create-deployment <prod-app-id>` instead.)
+3. First-ever production apply must revisit sizing in `production.tfvars`.
+   Databases are per-environment clusters — production data never derives
+   from staging. (DO's cluster **fork** exists for cloning production into a
+   debugging environment, not for promotes.)
+4. Smoke-check `/health` on the production URL and record the promoted sha
+   in `docs/STATUS.md`.
 
 ## Unblocking actual deployment — what Marc must provide
 
 | # | Needed | Where it goes |
 |---|---|---|
-| 1 | **AWS account** (fresh account recommended; billing set up) | — |
-| 2 | **Region decision** (files assume `eu-west-2` London) | `variables.tf` / `envs/*.tfvars`, backend block in `versions.tf`, GitHub env variable `AWS_REGION` |
-| 3 | **Bootstrap credentials** — one human/root-adjacent IAM user or SSO role able to run the first `terraform apply` (which then creates the CI OIDC role; CI never needs long-lived keys) | operator's local `aws configure` / SSO, never the repo |
-| 4 | **GitHub environment `staging`** with secret `AWS_ROLE_ARN` = `terraform output github_deploy_role_arn`, variable `AWS_REGION` | repo Settings → Environments |
-| 5 | **Repository variable `AWS_DEPLOY_ENABLED` = `true`** — the master switch; the deploy workflow is a guaranteed no-op until this exists | repo Settings → Secrets and variables → Actions → Variables |
-| 6 | **Domain** for staging (and later production) — needed for ALB + ACM cert, and eventually SES sender identities (Phase 3) | `networking.tf` ALB TODO; `ses.tf` |
+| 1 | **DigitalOcean account** (team created, billing set up) | — |
+| 2 | **API token** (write scope) | operator's `DIGITALOCEAN_TOKEN` env var for Terraform; same value as secret `DIGITALOCEAN_ACCESS_TOKEN` in the GitHub **`staging` environment** (repo Settings → Environments) — the only GitHub-side secret |
+| 3 | **DO GitHub app authorisation** for `msd2/auto-insight` (App Platform builds from the repo; one-time OAuth in the DO console) | DO console → App Platform |
+| 4 | **Region confirmation** (files assume `lon1`/`lon` London) | `envs/*.tfvars`, `versions.tf` backend endpoint |
+| 5 | **Repository variable `DO_DEPLOY_ENABLED` = `true`** — the master switch; the workflow is a guaranteed no-op until this exists | repo Settings → Secrets and variables → Actions → Variables |
+| 6 | **Domain** (staging + production hostnames) | `app.tf` domain TODO; DNS at the registrar |
+| 7 | **Postmark account** + sender-domain DKIM/return-path DNS verification (Phase 3, but account approval has lead time — start early) | Postmark console; server token → App Platform SECRET env `POSTMARK_SERVER_TOKEN` |
 
 ## Bootstrap (first-ever apply, run manually)
 
-1. Create the state bucket + DynamoDB lock table; uncomment the backend block
-   in `versions.tf`; `terraform init`.
-2. `terraform apply -var-file=envs/staging.tfvars` (expect to iterate — this
-   config has never met a real AWS API; run `terraform validate` first).
-3. Compose `DATABASE_URL` from `terraform output db_endpoint` + the RDS
-   master secret (`db_master_user_secret_arn`) and store it:
-   `aws secretsmanager put-secret-value --secret-id autoinsight/staging/database-url --secret-string 'postgresql+asyncpg://…'`.
-4. Do items 4–5 from the table above, push to `main`, watch the deploy run.
+1. Create a Spaces bucket + access key for state; uncomment the backend in
+   `versions.tf`; `terraform init` (Spaces key pair via
+   `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` — an s3-backend quirk, they
+   are Spaces credentials, not AWS ones).
+2. `export DIGITALOCEAN_TOKEN=…` then
+   `terraform apply -var-file=envs/staging.tfvars` — run
+   `terraform validate` first; this config has never met the real API.
+3. Confirm the app's first deployment: migrate job ran, `/health` on the
+   `app_live_url` output returns `database: "ok"`, worker component is
+   running.
+4. Do items 2 (GitHub half) + 5 from the table above; push a trivial commit
+   to `main`; watch DO auto-deploy and the observer workflow go green.
 
 ## Later hardening (tracked, deliberately skipped for the pilot)
 
-- Private subnets + NAT (or VPC endpoints) instead of default-VPC public
-  subnets with public IPs (see `networking.tf` header for the rationale).
-- Tighten the OIDC trust to the exact `environment:staging` subject and the
-  ECS deploy policy with `ecs:cluster` conditions (`iam.tf` TODOs).
-- Immutable ECR tags + task definitions pinned to shas in CI
-  (`deploy-staging.yml` TODO).
-- Container Insights, alarms, RDS Performance Insights.
+- Scope the DO token more tightly (custom scopes are new-ish in DO; today it
+  is effectively account-wide write — treat it accordingly).
+- `preserve_path_prefix`/route-rewrite verification for `/api` (TODO in
+  `app.tf`), custom domains, deployment-failure alerts.
+- Production DB: standby node (`node_count = 2`), connection pool sizing.
+- Postmark bounce/complaint webhook signing verification (Phase 3 WP 3.2).

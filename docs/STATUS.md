@@ -11,7 +11,7 @@ Read `CLAUDE.md` first if you haven't. This doc is the live state of Phase 0
 | 0.1 Repo scaffold | #1 | **DONE** (PR #1, merged). Rebuilt from spec — the earlier background agent's work never landed. |
 | 0.2 Schema & tenancy | #2 | **DONE**, commit `4adb02d`. 16-table baseline migration `d5d0e6b3dd72`; OrgContext repositories; tenancy + drift tests. |
 | 0.3 Auth & membership | #3 | **DONE** — see "Wave 2 notes". Sessions/reset migration `cc8b261a61d9`; argon2; seed CLI; 33 api tests. |
-| 0.4 Deploy pipeline authoring | #4 | **DONE (authoring)**, commit `e7248f5`. Execution blocked on Marc (AWS account etc. — see infra/README.md). |
+| 0.4 Deploy pipeline authoring | #4 | **DONE (authoring)** — reworked 2026-07-12 from AWS to **DigitalOcean + Postmark** on Marc's decision. Execution blocked on Marc (DO account etc. — see infra/README.md). |
 | 0.5 Pack content | #5 | **DONE** — content `ecd4e8a` (wave 1) + preview wiring `582629a` (wave 2): /dev/packs renders all 4 packs from sample data. |
 
 **Phase 0 exit criterion verified 2026-07-12** on a fresh database: alembic
@@ -44,15 +44,23 @@ via PR when ready; CI runs on `claude/**` pushes and PRs.
   /auth/password-reset/{request,confirm}. Email unique per org; multi-org
   email logs in with `org_slug` (documented in `auth/__init__.py`).
   `EmailProvider` adapter interface + logging stub in
-  `api/autoinsight/adapters/` (SES is Phase 3). Seed:
+  `api/autoinsight/adapters/` (Postmark is Phase 3). Seed:
   `uv run python -m autoinsight.cli seed-org --name X --slug x --email e
   --user-name N --password p` (idempotent by slug).
-- **WP 0.4** — CI `migrations` job (clean-DB alembic upgrade);
-  `deploy-staging.yml` gated behind `AWS_DEPLOY_ENABLED` repo variable +
-  `staging` GitHub environment (OIDC role, no stored keys); `infra/`
-  Terraform skeleton. **Recommendation: ECS Fargate for api+worker** (App
-  Runner can't host the non-HTTP Procrastinate worker). `terraform validate`
-  not yet run (no terraform in the authoring env).
+- **WP 0.4** — CI `migrations` job (clean-DB alembic upgrade). Hosting
+  decided (Marc, 2026-07-12): **DigitalOcean App Platform + Managed
+  Postgres 16, Postmark for email** (replaces the earlier AWS/SES
+  authoring). One App Platform app per environment: api service, first-class
+  Procrastinate **worker component**, web static site, PRE_DEPLOY
+  `alembic upgrade head` job; built from the repo via DO's GitHub
+  integration using `infra/docker/api.Dockerfile` (uv-based, one image).
+  Staging CD is App Platform `deploy_on_push` from `main`;
+  `deploy-staging.yml` is a gated observer (`DO_DEPLOY_ENABLED` repo
+  variable; `staging` environment holds `DIGITALOCEAN_ACCESS_TOKEN`) that
+  polls the DO deployment and fails the commit check if the rollout fails.
+  Promote = push a verified sha to the `production` branch (second
+  app/cluster). `terraform validate` and a docker build have NOT run in the
+  authoring env — expect first-run nits.
 - **WP 0.5 preview** — `/dev/packs` + `/dev/packs/$slug` (outside AppShell)
   glob-import pack JSON from `content/` (no duplication); typed aggregate
   contract + data-driven Recharts components (seed of WP 2.1); per-pack
@@ -98,11 +106,12 @@ with vite 6), uv pinned to Python 3.12 via `api/.python-version`.
 
 Phase 0 code work is complete. What remains before Phase 1 starts:
 
-1. **WP 0.4 execution** (blocked on Marc, item 1 below): AWS account →
-   bootstrap `terraform apply` → GitHub environment + `AWS_DEPLOY_ENABLED`
-   → first staging deploy. Checklist in `infra/README.md` §"Unblocking
-   actual deployment". The Phase 0 exit line ("logged-in user in a seeded
-   org sees the app shell **on staging**") closes when this lands.
+1. **WP 0.4 execution** (blocked on Marc, item 1 below): DO account +
+   API token → GitHub-app authorisation → `terraform apply` →
+   `DO_DEPLOY_ENABLED=true` → first staging deploy. Checklist in
+   `infra/README.md` §"Unblocking actual deployment". The Phase 0 exit line
+   ("logged-in user in a seeded org sees the app shell **on staging**")
+   closes when this lands.
 2. **Phase 1 wave planning**: WP 1.1 Spektrix adapter and 1.2 sync engine
    are the next buildable WPs (1.1 first — 1.2 depends on it); 1.3/1.4 UI
    can follow in parallel once the adapter's shape settles.
@@ -114,10 +123,12 @@ Phase 0 code work is complete. What remains before Phase 1 starts:
 
 ## Blocked on Marc (only he can unblock)
 
-1. **AWS account/credentials** → staging deploy (WP 0.4 execution). Full
-   list of the six required items: `infra/README.md` §"Unblocking actual
-   deployment" (account, region, bootstrap creds, `staging` environment
-   with `AWS_ROLE_ARN`/`AWS_REGION`, `AWS_DEPLOY_ENABLED` variable, domain).
+1. **DigitalOcean account/token** → staging deploy (WP 0.4 execution). Full
+   list of the seven required items: `infra/README.md` §"Unblocking actual
+   deployment" (DO account, API token → `staging` environment secret
+   `DIGITALOCEAN_ACCESS_TOKEN`, one-time DO GitHub-app authorisation for
+   the repo, region confirmation — lon1 assumed, `DO_DEPLOY_ENABLED`
+   variable, domain, Postmark account + sender-domain DNS).
 2. **Pack question sign-off** against real Culture Counts question banks
    (`content/` wording is DRAFT) — gates Phase 2 WPs 2.1/2.2.
 3. Pilot org shortlist + product name (open questions in

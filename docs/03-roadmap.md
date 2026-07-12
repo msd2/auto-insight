@@ -18,7 +18,7 @@ A **non-code track** for Marc runs alongside (bottom of this doc).
 | **0.1 Repo scaffold** | Monorepo: `api/` (FastAPI, SQLAlchemy 2, Alembic, Procrastinate), `web/` (Vite + React + TS, TanStack Query/Router), `docs/`. Ruff + mypy + pytest; ESLint + Prettier + Vitest. Docker Compose for local Postgres. | `make dev` brings up api+web+db locally; `make test` green in CI |
 | **0.2 Baseline schema & tenancy layer** | Alembic migration for all tables in `02-architecture.md` §Data model. `OrgContext`-scoped repository layer; tests proving cross-org reads are impossible through it. | Migration applies clean; tenancy tests pass |
 | **0.3 Auth & org membership** | Email + password with secure session cookies, password reset by email, `member`/`admin` roles, org switcher for internal staff accounts. No self-serve signup — orgs and users seeded by CLI command. | Seeded admin logs in, sees empty app shell, role gates enforced |
-| **0.4 Deploy pipeline** | Decide AWS runtime (App Runner vs ECS Fargate — pick simplest that runs api+worker), Terraform or CDK for infra, GitHub Actions CD to staging on merge, manual promote to production. Secrets in SSM/Secrets Manager. | Merge to main → staging updated; documented promote step |
+| **0.4 Deploy pipeline** | Runtime decided: **DigitalOcean App Platform** (api service + Procrastinate worker component + web static site + pre-deploy migration job) + Managed Postgres 16, Terraform in `infra/`. Staging CD = App Platform's native GitHub integration on merge to main (gated observer workflow reports the outcome); manual promote to production. Secrets as App Platform SECRET env vars. Decision record: `infra/README.md`. | Merge to main → staging updated; documented promote step |
 | **0.5 Insight pack content: launch catalogue** | Author the 4 packs from the brief as versioned content: question manifest, insight spec (charts/metrics/narrative prompt), realistic sample dataset for previews. Content format documented so packs are data, not code. Requires Culture Counts question/dimension input from Marc. | 4 packs load from fixtures; schema-validated; sample data renders the preview charts in Storybook or a dev page |
 
 **Phase exit**: a logged-in user in a seeded org sees the app shell on staging.
@@ -67,7 +67,7 @@ zero human steps.
 | WP | Scope | Acceptance criteria |
 |---|---|---|
 | **3.1 Eligibility engine** | Implement the eligibility query from `02-architecture.md`: attendees minus no-email / box-office opt-out / suppression list / frequency cap (org-configurable, default 30 days). Every exclusion recorded as a `suppressed` invitation with reason. | Property-style tests: no suppressed or capped customer ever reaches `pending`; exclusion reasons auditable per send |
-| **3.2 SES integration & sender identities** | `EmailProvider` for SES; configuration sets; SNS webhook endpoint normalising delivery/bounce/complaint into `email_events`; bounces/complaints → immediate suppression + invitation status flip. Per-org sender identity setup (subdomain, DKIM) as a documented runbook executed with each pilot org. | Sandbox end-to-end test: send → delivery event recorded; simulated bounce suppresses future sends to that address |
+| **3.2 Postmark integration & sender identities** | `EmailProvider` for Postmark; message streams; webhook endpoint (with signature/basic-auth verification) normalising delivery/bounce/complaint into `email_events`; bounces/complaints → immediate suppression + invitation status flip. Per-org sender identity setup (subdomain, DKIM + return-path DNS) as a documented runbook executed with each pilot org. | Test-mode end-to-end: send → delivery event recorded; simulated bounce (Postmark test tokens/bounce triggers) suppresses future sends to that address |
 | **3.3 Send pipeline & scheduler** | Scheduler job creates invitations post-instance per allocation config; send job with batching, retries, idempotency (an invitation is never sent twice — enforce with status transitions + unique constraint on send attempt); reminder job (default +3 days, once, only status `sent`). | Kill the worker mid-batch, restart: no duplicate emails (verified via provider message IDs in tests); reminders never go to responders/bounces |
 | **3.4 Invitation email template & unsubscribe** | One locked, research-only, mobile-tested email template (org branding slots: name, logo, colour). `List-Unsubscribe`/`List-Unsubscribe-Post` headers + tokenised one-click unsubscribe page → suppression + confirmation. Plain-text alternative part. | Renders in major clients (Litmus-style checklist); unsubscribe from a real email suppresses within seconds; no promotional content slots exist |
 | **3.5 Send monitoring UI** | Per-allocation send report: eligible/sent/delivered/bounced/complained/unsubscribed counts, exclusion-reason breakdown, per-recipient status table (email shown, no other PII), alert states (complaint rate > 0.1%, bounce > 2% → pause sends for that org + notify us). | Numbers reconcile exactly with `invitations` + `email_events`; alert pause verified by test |
@@ -130,7 +130,7 @@ Prioritise from pilot learnings:
 
 - 0.5 (pack content) needs Marc's input on Culture Counts questions/dimensions — start early, it gates 2.1 and 2.2.
 - 2.2 and 4.1 both involve Culture Counts platform specifics — do the 2.2 spike and 4.1 spike together if possible.
-- 3.2 SES production access has AWS-side lead time (support case + warm-up) — request as soon as Phase 3 starts, not when it's needed.
+- 3.2 Postmark account approval + sender-domain DNS verification have lead time (short on the provider side, but days once each org's DNS team is involved) — start as soon as Phase 3 starts, not when sending is needed.
 - Phase 4 can begin while Phase 3 hardening finishes; Phase 5 WP 5.1/5.2 can be built against fixture responses before real data exists.
 
 ## Non-code track (Marc, parallel)
@@ -140,5 +140,5 @@ Prioritise from pilot learnings:
 | Phase 0 | Confirm pilot orgs (2–5); pick product name; provide CC question sets for the 4 packs |
 | Phase 1 | Pilot org Spektrix API credentials + data-sharing sign-off |
 | Phase 2 | DPA template + privacy notice drafted (legal review) |
-| Phase 3 | Per-org sender subdomain DNS with each pilot org's IT; SES production access request; ESP warm-up schedule |
+| Phase 3 | Per-org sender subdomain DNS (DKIM + return-path) with each pilot org's IT; Postmark account setup + sending approval |
 | Phase 5 | Review first generated narratives with pilot orgs; funder-report feedback loop |

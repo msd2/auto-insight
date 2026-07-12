@@ -1,15 +1,30 @@
-# Deploy to staging — WP 0.4 (AUTHORING ONLY, currently inert)
+# Staging deploy status — WP 0.4 (AUTHORING ONLY, currently inert)
+#
+# ── Why this workflow deploys nothing ───────────────────────────────────────
+# Staging CD is DigitalOcean App Platform's own GitHub integration
+# (infra/app.tf: github{ branch = "main", deploy_on_push = true }): a push to
+# main makes DO itself rebuild all components, run the PRE_DEPLOY `migrate`
+# job (alembic upgrade head — a failed migration aborts the rollout), and
+# roll the app. Re-implementing that push-build-deploy loop here would just
+# race the platform. So this workflow is an OBSERVER:
+#
+#   * on push to main   — wait for the deployment DO triggered for this push
+#                         and fail the check if it fails, so a red deploy is
+#                         visible on the commit in GitHub, not only in the DO
+#                         console;
+#   * on dispatch       — force a fresh deployment (doctl apps
+#                         create-deployment --wait), the manual redeploy lever.
 #
 # ── How the gate works ──────────────────────────────────────────────────────
-# There is no AWS account yet, so every AWS-touching job is guarded with
+# There is no DigitalOcean account yet, so the doctl job is guarded with
 #
-#     if: vars.AWS_DEPLOY_ENABLED == 'true'
+#     if: vars.DO_DEPLOY_ENABLED == 'true'
 #
-# `AWS_DEPLOY_ENABLED` is a **repository variable** (Settings → Secrets and
+# `DO_DEPLOY_ENABLED` is a **repository variable** (Settings → Secrets and
 # variables → Actions → Variables). It does not exist yet, so the expression
-# evaluates to '' == 'true' → false and the deploy job is SKIPPED on every
-# push to main. Nothing here can fail or touch AWS until someone explicitly
-# creates that variable with the value `true`.
+# evaluates to '' == 'true' → false and the job is SKIPPED on every push.
+# Nothing here can fail or touch DO until someone explicitly creates that
+# variable with the value `true`.
 #
 # A repository variable is used for the gate (not a secret) because the
 # `secrets` context is not available in job-level `if:` expressions, and
@@ -17,137 +32,108 @@
 # scheduled into its environment — a repo-level variable is the only thing
 # GitHub lets us test before the job starts.
 #
-# The deploy job additionally declares `environment: staging`. Credentials
-# and config are read from that GitHub environment (secrets: AWS_ROLE_ARN;
-# variables: AWS_REGION), so:
-#   * flipping the gate on without also creating the `staging` environment
-#     fails fast at the credentials step rather than half-deploying, and
-#   * any protection rules (required reviewers, branch restriction) added to
-#     the `staging` environment are enforced automatically.
+# The job additionally declares `environment: staging`: the DO API token is
+# read from that GitHub environment (secret DIGITALOCEAN_ACCESS_TOKEN — the
+# ONLY GitHub-side secret this stack needs), so flipping the gate on without
+# creating the environment fails fast at the doctl step, and any protection
+# rules on `staging` are enforced automatically.
 #
-# ── To arm this workflow (see infra/README.md §Unblocking deployment) ───────
-#   1. Apply the Terraform in infra/ (creates ECR repo, ECS cluster/services,
-#      RDS, and the GitHub OIDC deploy role).
-#   2. Create GitHub environment `staging` with:
-#        secret  AWS_ROLE_ARN  = arn of the Terraform-created deploy role
-#        variable AWS_REGION   = the chosen region (e.g. eu-west-2)
-#   3. Create repository variable AWS_DEPLOY_ENABLED = true.
+# ── To arm this workflow (see infra/README.md §Unblocking) ──────────────────
+#   1. Apply the Terraform in infra/ (creates the app + database) and
+#      authorise the DO GitHub app for this repo.
+#   2. Create GitHub environment `staging` with secret
+#      DIGITALOCEAN_ACCESS_TOKEN = a DO API token.
+#   3. Create repository variable DO_DEPLOY_ENABLED = true.
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: Deploy to staging
+name: Staging deploy status
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Never run two staging deploys at once; queue (don't cancel) in-flight ones
-# so a deploy is never killed mid-migration.
+# One watcher/redeploy at a time; queue rather than cancel so we never stop
+# observing a rollout mid-flight.
 concurrency:
   group: deploy-staging
   cancel-in-progress: false
 
 permissions:
-  id-token: write # OIDC token for aws-actions/configure-aws-credentials
   contents: read
 
 env:
-  ECR_REPOSITORY: autoinsight-api # matches aws_ecr_repository.api in infra/ecr.tf
+  APP_NAME: autoinsight-staging # matches spec.name in infra/app.tf
 
 jobs:
   # Always runs (even while the gate is off) so a push to main leaves a
-  # visible record of whether a deploy was attempted or deliberately skipped.
+  # visible record of whether the deploy watch ran or was deliberately
+  # skipped.
   gate-status:
     runs-on: ubuntu-latest
     steps:
       - name: Report deploy gate state
         run: |
-          if [ "${{ vars.AWS_DEPLOY_ENABLED }}" = "true" ]; then
-            echo "::notice::AWS_DEPLOY_ENABLED=true — staging deploy will run."
+          if [ "${{ vars.DO_DEPLOY_ENABLED }}" = "true" ]; then
+            echo "::notice::DO_DEPLOY_ENABLED=true — App Platform deploys this push natively; the watch job will report its outcome."
           else
-            echo "::notice::Staging deploy SKIPPED: repository variable AWS_DEPLOY_ENABLED is not 'true' (no AWS account/credentials configured yet). See .github/workflows/deploy-staging.yml header and infra/README.md."
+            echo "::notice::Staging deploy watch SKIPPED: repository variable DO_DEPLOY_ENABLED is not 'true' (no DigitalOcean account/token configured yet). See .github/workflows/deploy-staging.yml header and infra/README.md."
           fi
 
-  deploy:
+  staging-deploy:
     # THE GATE — see the header comment. Until the repository variable
-    # AWS_DEPLOY_ENABLED is created with value 'true', this job never runs.
-    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    # DO_DEPLOY_ENABLED is created with value 'true', this job never runs.
+    if: vars.DO_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
-    environment: staging # secrets/vars + protection rules come from here
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
+    environment: staging # DIGITALOCEAN_ACCESS_TOKEN + protection rules come from here
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC — no long-lived keys)
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      - name: Log in to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # ── Build & push image ────────────────────────────────────────────────
-      # One image serves both api and worker (same codebase, different
-      # command — see infra/runtime.tf task definitions).
-      # TODO(wp0.4-execution): api/Dockerfile does not exist yet. Author it
-      # when the AWS account lands (uv-based multi-stage build, python:3.12
-      # slim runtime, uvicorn entrypoint overridable for the worker).
-      - name: Build and push api image
+      - name: Resolve app id
+        id: app
         run: |
-          IMAGE="${{ steps.ecr-login.outputs.registry }}/${ECR_REPOSITORY}"
-          docker build -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:staging" api/
-          docker push "$IMAGE:${GITHUB_SHA}"
-          docker push "$IMAGE:staging"
+          APP_ID=$(doctl apps list --output json | jq -r \
+            --arg name "$APP_NAME" '.[] | select(.spec.name == $name) | .id')
+          if [ -z "$APP_ID" ]; then
+            echo "::error::No App Platform app named '$APP_NAME' — has infra/ been applied?"
+            exit 1
+          fi
+          echo "id=$APP_ID" >> "$GITHUB_OUTPUT"
 
-      # ── Apply infrastructure ──────────────────────────────────────────────
-      # TODO(wp0.4-execution): decide whether CI applies Terraform or whether
-      # infra changes stay manual (recommended for the pilot: manual
-      # `terraform apply` from a laptop; CI only deploys application code —
-      # see infra/README.md §Deploy flow). If CI applies, add:
-      #   - hashicorp/setup-terraform@v3
-      #   - terraform -chdir=infra init
-      #   - terraform -chdir=infra plan -var-file=envs/staging.tfvars
-      #   - terraform -chdir=infra apply -auto-approve (or plan-only + manual)
-      - name: Terraform (placeholder)
-        run: echo "TODO(wp0.4-execution) — infra applied manually for now; see infra/README.md"
+      # Manual lever: workflow_dispatch forces a fresh deployment (e.g. after
+      # rotating a secret or when a previous rollout was cancelled). --wait
+      # blocks until the rollout finishes and exits non-zero on failure.
+      - name: Force redeploy (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: doctl apps create-deployment "${{ steps.app.outputs.id }}" --wait
 
-      # ── Run migrations ────────────────────────────────────────────────────
-      # RDS is not publicly reachable, so migrations run *inside* the VPC as
-      # a one-off Fargate task using the image just pushed.
-      # TODO(wp0.4-execution): fill in real subnet/SG ids (Terraform outputs)
-      # and wait/poll for task exit status; fail the deploy on non-zero exit.
-      - name: Run database migrations (one-off ECS task)
+      # Push path: DO already started a deployment for this push; find it and
+      # report its outcome as this check's outcome.
+      # TODO(wp0.4-execution): match the deployment to $GITHUB_SHA (cause/
+      # commit fields in the deployment object) instead of trusting "newest";
+      # good enough until pushes land seconds apart.
+      - name: Wait for the App Platform deployment triggered by this push
+        if: github.event_name == 'push'
         run: |
-          echo "TODO(wp0.4-execution): aws ecs run-task \\"
-          echo "  --cluster autoinsight-staging \\"
-          echo "  --launch-type FARGATE \\"
-          echo "  --task-definition autoinsight-staging-api \\"
-          echo "  --network-configuration '<subnets/security groups from terraform output>' \\"
-          echo "  --overrides '{\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"alembic\",\"upgrade\",\"head\"]}]}'"
-          echo "  ...then aws ecs wait tasks-stopped + check exit code"
-
-      # ── Roll the services ─────────────────────────────────────────────────
-      # Runtime decision recorded in infra/README.md: ECS Fargate, two
-      # services (api + worker) off the same image. force-new-deployment
-      # re-pulls the :staging tag.
-      # TODO(wp0.4-execution): switch to registering a new task definition
-      # revision pinned to ${GITHUB_SHA} instead of the mutable :staging tag
-      # (better rollback story), then update-service to that revision.
-      - name: Deploy api + worker services
-        run: |
-          aws ecs update-service --cluster autoinsight-staging \
-            --service autoinsight-staging-api --force-new-deployment
-          aws ecs update-service --cluster autoinsight-staging \
-            --service autoinsight-staging-worker --force-new-deployment
-          aws ecs wait services-stable --cluster autoinsight-staging \
-            --services autoinsight-staging-api autoinsight-staging-worker
-
-      # TODO(wp0.4-execution): web/ SPA hosting (S3+CloudFront vs served by
-      # the api container) is undecided — add its build/upload step here once
-      # infra/README.md records the decision.
-      - name: Smoke check
-        run: |
-          echo "TODO(wp0.4-execution): curl https://<staging-domain>/health and assert database:ok"
+          APP_ID="${{ steps.app.outputs.id }}"
+          # Give DO a moment to register the deployment for this push.
+          sleep 20
+          for i in $(seq 1 60); do # ~20 min ceiling
+            PHASE=$(doctl apps list-deployments "$APP_ID" --output json | jq -r '.[0].phase')
+            echo "attempt $i: newest deployment phase=$PHASE"
+            case "$PHASE" in
+              ACTIVE)
+                echo "::notice::Staging deployment succeeded."
+                exit 0 ;;
+              ERROR|CANCELED)
+                echo "::error::Staging deployment finished in phase $PHASE — see the App Platform console."
+                exit 1 ;;
+              *)
+                sleep 20 ;;
+            esac
+          done
+          echo "::error::Timed out waiting for the staging deployment to finish."
+          exit 1

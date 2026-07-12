@@ -3,11 +3,16 @@
 #   terraform apply -var-file=envs/staging.tfvars
 
 environment = "staging"
-aws_region  = "eu-west-2" # TODO: confirm region with Marc before first apply
+region      = "lon1" # TODO: Marc to confirm region before first apply
+app_region  = "lon"
 
-# Pilot sizing — defaults in variables.tf already match; listed here so the
-# knobs per environment are explicit.
-db_instance_class    = "db.t4g.micro"
-api_desired_count    = 1
-worker_desired_count = 1
-image_tag            = "staging"
+# Staging CD is App Platform's own GitHub integration: push to main →
+# rebuild → migrate (pre-deploy job) → rollout. See deploy-staging.yml.
+github_branch  = "main"
+deploy_on_push = true
+
+# Pilot sizing — defaults in variables.tf already match; listed so the
+# per-environment knobs are explicit.
+db_size               = "db-s-1vcpu-1gb"
+api_instance_count    = 1
+worker_instance_count = 1

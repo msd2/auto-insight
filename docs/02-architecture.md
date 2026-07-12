@@ -22,8 +22,8 @@ every external system so integrations can be added without touching core code.
                     │  insight generation                      │
                     └───┬──────────┬──────────┬──────────┬─────┘
                         ▼          ▼          ▼          ▼
-                    Spektrix   Culture     AWS SES    Claude API
-                     (API)     Counts     (+ SNS       (LLM)
+                    Spektrix   Culture    Postmark   Claude API
+                     (API)     Counts    (+ event      (LLM)
                                (API)     webhooks)
 ```
 
@@ -35,9 +35,9 @@ every external system so integrations can be added without touching core code.
 | DB | Postgres 16 | One datastore for app data **and** job queue |
 | Jobs | Procrastinate | Postgres-backed queue with cron/scheduled jobs; no Redis/broker to run during the pilot. If it ever limits us, the job functions port to Celery unchanged. |
 | Frontend | Vite + React + TypeScript, TanStack Query + Router, Recharts | Locked decision; Recharts covers the launch chart set |
-| Email | AWS SES with configuration sets; SNS → webhook for delivery/bounce/complaint events | Cheapest at volume, per-org sender identities, mature suppression tooling |
+| Email | Postmark (transactional-only ESP); event webhooks for delivery/bounce/complaint | Deliverability-first provider: per-domain DKIM + custom return-path, mature bounce/complaint webhooks, no dedicated-IP warm-up case at pilot volume; research-only mail fits its transactional posture |
 | LLM | Claude API (structured outputs) | Narrative generation + free-text theme extraction |
-| Hosting | AWS (single environment for pilot; ECS Fargate or App Runner) | SES already pulls us to AWS; final sizing is a Phase 0 work package |
+| Hosting | DigitalOcean: App Platform (api service + Procrastinate worker component + web static site + pre-deploy migration job) + Managed Postgres 16 | Decided in WP 0.4: first-class worker component runs the non-HTTP Procrastinate process; native GitHub CD; smallest operational surface for the pilot (full decision record: `infra/README.md`) |
 
 ## Multi-tenancy
 
@@ -67,7 +67,7 @@ implementation is an adapter, not a rewrite:
   spike).
 - **`EmailProvider`** — `send(message) -> provider_message_id`, plus a webhook
   handler that normalises delivery/bounce/complaint events.
-  First impl: **SES**.
+  First impl: **Postmark**.
 
 ## Data model (draft)
 
@@ -136,7 +136,7 @@ Sync is idempotent (upsert on `org_id + external_id`) and records a
    a locked research-only template (org name, event name, link, unsubscribe).
 5. Reminder job: after `reminder_delay` (default 3 days), re-send once to
    invitations still in `sent`.
-6. SNS webhooks update `email_events`; bounces and complaints immediately
+6. Postmark webhooks update `email_events`; bounces and complaints immediately
    insert suppressions and flip invitation status.
 
 ### Response ingestion & insight
@@ -158,12 +158,20 @@ the computed aggregates + free-text answers to produce structured narrative
 - One-click unsubscribe: `List-Unsubscribe` + `List-Unsubscribe-Post` headers
   and a tokenised unsubscribe page → immediate suppression.
 - Frequency cap enforced in the eligibility query, not the UI.
-- `credentials` encrypted at rest (KMS or libsodium sealed box); DB access via
+- `credentials` encrypted at rest (app-level libsodium sealed box; key held as
+  an App Platform secret env var); DB access via
   least-privilege roles; audit trail = `invitations` + `email_events`.
 
 ## Environments
 
-Pilot: `staging` + `production`, both on AWS; GitHub Actions CI (lint,
-typecheck, tests, migrations check) and CD to staging on merge. SES starts in
-sandbox against staging with verified test addresses; production access
-requested during Phase 3 with a warm-up plan.
+Pilot: `staging` + `production`, each a DigitalOcean App Platform app with
+its own Managed Postgres cluster (Terraform in `infra/`). GitHub Actions runs
+CI (lint, typecheck, tests, migrations check); staging CD is App Platform's
+native GitHub integration — a push to `main` rebuilds, runs
+`alembic upgrade head` as a pre-deploy job, and rolls out, with a gated
+GitHub workflow (`deploy-staging.yml`) reporting the deployment's outcome on
+the commit. Production promotes manually (push a staging-verified sha to the
+`production` branch — `infra/README.md` §Promote). Postmark starts in test
+mode against staging with the sender domain verified; full sending approval
+is requested during Phase 3 (short lead time; no warm-up plan needed at
+pilot volume).
